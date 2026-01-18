@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pick or Pass - Preferences</title>
+</head>
+<body>
+    <h1>User Preferences</h1>
+
+    <form method="POST">
+        <label>Genres you like:</label><br>
+        <input type="text" name="likes"><br><br>
+
+        <label>Genres you dislike:</label><br>
+        <input type="text" name="dislikes"><br><br>
+
+        <label>Preferred pace:</label><br>
+        <select name="pace">
+            <option value="slow">Slow</option>
+            <option value="medium">Medium</option>
+            <option value="fast">Fast</option>
+        </select><br><br>
+
+        <label>Emotional tolerance:</label><br>
+        <select name="emotional_tolerance">
+            <option value="light">Light</option>
+            <option value="moderate">Moderate</option>
+            <option value="heavy">Heavy</option>
+        </select><br><br>
+
+        <label>Why do you consume media?</label><br>
+        <select name="goal">
+            <option value="relax">Relax</option>
+            <option value="think">Think</option>
+            <option value="escape">Escape</option>
+        </select><br><br>
+
+        <button type="submit">Save Preferences</button>
+    </form>
+</body>
+</html>
