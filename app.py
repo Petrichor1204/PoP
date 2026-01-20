@@ -1,4 +1,5 @@
 import os
+import json
 from flask import Flask, render_template, request
 import google.genai as genai
 from dotenv import load_dotenv
@@ -63,20 +64,20 @@ def evaluate_title(title, media_type, preferences):
         Gemini's response as a string
     """
     # Hardcoded title for testing
-    title = "21 Jump Street"
-    media_type = "movie"
+    # title = "Oliver Twist"
+    # media_type = "book"
     
     # Format preferences for the prompt
     likes_str = ", ".join(preferences.get("likes", [])) if preferences.get("likes") else "None specified"
     dislikes_str = ", ".join(preferences.get("dislikes", [])) if preferences.get("dislikes") else "None specified"
     
-    prompt = f"""You are an assistant that helps users decide whether a movie or book is worth their time.
+    prompt = f"""You are an assistant that helps someone decide whether a movie or book is worth their time.
 
-The user is considering the following title:
+You are considering the following title:
 Title: "{title}"
 Type: "{media_type}"  (movie or book)
 
-The user has these preferences:
+Here are your preferences:
 - Likes: {likes_str}
 - Dislikes: {dislikes_str}
 - Preferred pace: {preferences.get("pace", "Not specified")}
@@ -84,7 +85,7 @@ The user has these preferences:
 - Goal: {preferences.get("goal", "Not specified")}
 
 Your task:
-Evaluate whether the user is likely to enjoy this title.
+Evaluate whether you are likely to enjoy this title.
 
 Rules:
 - Do NOT include spoilers.
@@ -134,6 +135,7 @@ Respond ONLY with the JSON object.
 @app.route("/", methods=["GET", "POST"])
 def preferences():
     gemini_response = None
+    evaluated_title = None
     if request.method == "POST":
         # Build cleaned and normalized preference object
         user_preferences = build_preference_object(request.form)
@@ -141,10 +143,63 @@ def preferences():
         print(user_preferences)  # proof it works
         
         # Evaluate the title with Gemini
-        gemini_response = evaluate_title("21 Jump Street", "movie", user_preferences)
+        evaluated_title = "Hustle"
+        gemini_response = evaluate_title(evaluated_title, "movie", user_preferences)
+        gemini_response = clean_gemini_response(gemini_response)
+        try:
+            parsed = json.loads(gemini_response)
+        except Exception as e:
+            print(f"Failed to parse Gemini JSON: {e}")
+            parsed = {}
+        gemini_response = format_verdict(parsed)
         print(f"Gemini Response: {gemini_response}")
+    
+    return render_template("index.html", gemini_response=gemini_response, evaluated_title=evaluated_title)
 
-    return render_template("index.html", gemini_response=gemini_response)
+def clean_gemini_response(text):
+    """
+    Removes markdown code fences from a Gemini response if present.
+    Returns a clean JSON string.
+    """
+    if text is None:
+        return None
+    text = text.strip()
+
+    if text.startswith("```"):
+        lines = text.splitlines()
+        # Remove first and last fence lines
+        lines = lines[1:-1]
+        text = "\n".join(lines)
+
+    return text
+
+def format_verdict(result):
+    verdict_map = {
+        "Yes": "PICK",
+        "No": "PASS",
+        "Maybe": "MAYBE"
+    }
+
+    verdict = verdict_map.get(result.get("verdict"), "MAYBE")
+    confidence = result.get("confidence", 0)
+    reasoning = result.get("reasoning", "")
+    mismatches = result.get("potential_mismatches", [])
+
+    lines = []
+    lines.append(f"{verdict} (Confidence: {confidence:.2f})\n")
+    lines.append("Why:")
+    lines.append(reasoning)
+
+    if mismatches:
+        lines.append("\nPotential concerns:")
+        for item in mismatches:
+            lines.append(f"- {item}")
+    else:
+        lines.append("\nPotential concerns:")
+        lines.append("- None")
+
+    return "\n".join(lines)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -39,7 +39,7 @@
 
     {% if gemini_response %}
     <div style="margin-top: 30px; padding: 20px; border: 1px solid #ccc; background-color: #f9f9f9;">
-        <h2>Gemini Evaluation for "The Matrix"</h2>
+        <h2>Gemini Evaluation for "{{ evaluated_title }}"</h2>
         <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ gemini_response }}</pre>
     </div>
     {% endif %}
