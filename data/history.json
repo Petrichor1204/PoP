@@ -1,0 +1,25 @@
+[
+  {
+    "title": "My girl",
+    "media_type": "movie",
+    "verdict": "No",
+    "confidence": 0.7,
+    "reasoning": "This movie is a coming-of-age drama, which does not align with your preference for horror or your goal to relax.",
+    "potential_mismatches": [
+      "Not horror",
+      "Not relaxing"
+    ],
+    "timestamp": "2026-01-21T00:16:46.831878+00:00"
+  },
+  {
+    "title": "Cinderella",
+    "media_type": "movie",
+    "verdict": "No",
+    "confidence": 0.7,
+    "reasoning": "You dislike romance, which is a major theme in Cinderella.",
+    "potential_mismatches": [
+      "romance"
+    ],
+    "timestamp": "2026-01-21T00:55:13.246984+00:00"
+  }
+]

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PoP – History</title>
+</head>
+<body>
+    <h1>Past Decisions</h1>
+
+    {% if decisions %}
+        <ul>
+        {% for d in decisions %}
+            <li>
+                <strong>{{ d.title }}</strong> ({{ d.media_type }})<br>
+                Verdict: {{ d.verdict }} ({{ d.confidence }})<br>
+                Reason: {{ d.reasoning }}<br>
+
+                {% if d.potential_mismatches %}
+                    Concerns:
+                    <ul>
+                        {% for item in d.potential_mismatches %}
+                            <li>{{ item }}</li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    Concerns: None
+                {% endif %}
+
+                <small>Checked on {{ d.timestamp }}</small>
+            </li>
+            <hr>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No past decisions yet.</p>
+    {% endif %}
+
+    <a href="/">Back to home</a>
+</body>
+</html>
