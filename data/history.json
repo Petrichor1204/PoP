@@ -21,5 +21,29 @@
       "romance"
     ],
     "timestamp": "2026-01-21T00:55:13.246984+00:00"
+  },
+  {
+    "title": "Cinderella",
+    "media_type": "movie",
+    "verdict": "No",
+    "confidence": 0.8,
+    "reasoning": "You dislike romance and musicals, both of which are prevalent in Cinderella.",
+    "potential_mismatches": [
+      "romance",
+      "musical",
+      "light emotional tone"
+    ],
+    "timestamp": "2026-01-22T03:17:35.910916+00:00"
+  },
+  {
+    "title": "Cinderella",
+    "media_type": "movie",
+    "verdict": "No",
+    "confidence": 0.8,
+    "reasoning": "You dislike romance, and Cinderella is a romance movie.",
+    "potential_mismatches": [
+      "romance"
+    ],
+    "timestamp": "2026-01-22T03:17:37.231283+00:00"
   }
 ]

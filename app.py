@@ -4,6 +4,7 @@ from flask import Flask, render_template, request
 import google.genai as genai
 from dotenv import load_dotenv
 from datetime import datetime, timezone
+import sqlite3
 
 load_dotenv()
 app = Flask(__name__)
@@ -160,21 +161,129 @@ def load_history(filepath="data/history.json"):
     except (json.JSONDecodeError, IOError):
         return []
 
-def save_decision(decision, filepath="data/history.json"):
-    history = load_history(filepath)
-    history.append(decision)
+# def save_decision(decision, filepath="data/history.json"):
+#     history = load_history(filepath)
+#     history.append(decision)
 
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(history, f, indent=2)
+#     with open(filepath, "w", encoding="utf-8") as f:
+#         json.dump(history, f, indent=2)
+def validate_decision(decision):
+    """Checks if a decision dict is valid for saving."""
+    REQUIRED_FIELDS = [
+        "title", "media_type", "verdict", "confidence",
+        "reasoning", "potential_mismatches", "timestamp"
+    ]
 
+    # Check required fields
+    if not all(field in decision for field in REQUIRED_FIELDS):
+        return False
+
+    # Validate confidence
+    confidence = decision["confidence"]
+    if not isinstance(confidence, (int, float)) or not (0 <= confidence <= 1):
+        return False
+
+    # Validate verdict
+    if decision["verdict"] not in {"Yes", "No", "Maybe"}:
+        return False
+
+    # Validate timestamp
+    if not is_valid_timestamp_string(decision["timestamp"]):
+        return False
+
+    # Validate non-empty strings
+    for field in ["title", "media_type", "reasoning"]:
+        if not isinstance(decision[field], str) or not decision[field].strip():
+            return False
+
+    # Validate mismatches is a list
+    if not isinstance(decision["potential_mismatches"], list):
+        return False
+
+    return True
+
+def is_valid_timestamp_string(timestamp_str):
+    try:
+        datetime.fromisoformat(timestamp_str)
+        return True
+    except ValueError:
+        return False
+
+def init_db():
+    conn = sqlite3.connect('my_database.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS decisions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_title TEXT,
+            item_type TEXT,
+            verdict TEXT,
+            confidence REAL,
+            reasoning TEXT,
+            potential_mismatches TEXT,
+            created_at TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+
+def save_decision(decision):
+    """Validate and save a decision to the SQLite database using a transaction."""
+    if not validate_decision(decision):
+        print("Decision is invalid, not saving.")
+        return False
+
+    try:
+        conn = sqlite3.connect('my_database.db')
+        cursor = conn.cursor()
+        # Serialize potential_mismatches to JSON string
+        mismatches_json = json.dumps(decision["potential_mismatches"], ensure_ascii=False)
+        with conn:
+            cursor.execute(
+                '''
+                INSERT INTO decisions (
+                    item_title, item_type, verdict, confidence, reasoning, potential_mismatches, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''',
+                (
+                    decision["title"],
+                    decision["media_type"],
+                    decision["verdict"],
+                    decision["confidence"],
+                    decision["reasoning"],
+                    mismatches_json,
+                    decision["timestamp"]
+                )
+            )
+        return True
+    except Exception as e:
+        print(f"Error saving decision: {e}")
+        return False
+    finally:
+        conn.close()
 
 @app.route("/history")
 def history():
-    decisions = load_history()
+    conn = sqlite3.connect('my_database.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT item_title, item_type, verdict, confidence, reasoning, potential_mismatches, created_at FROM decisions')
+    rows = cursor.fetchall()
+    decisions = []
+    for row in rows:
+        decisions.append({
+            "title": row[0],
+            "media_type": row[1],
+            "verdict": row[2],
+            "confidence": row[3],
+            "reasoning": row[4],
+            "potential_mismatches": json.loads(row[5]),
+            "timestamp": row[6]
+        })
+    conn.close()
     return render_template("history.html", decisions=decisions)
 
 
-
-
 if __name__ == '__main__':
+    init_db()
     app.run(debug=True)
