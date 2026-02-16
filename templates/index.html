@@ -7,6 +7,9 @@
     <h1>User Preferences</h1>
     <a href="/history">View past decisions</a>
 
+    {% if save_error %}
+    <div style="color: red; margin-bottom: 20px;">{{ save_error }}</div>
+    {% endif %}
     <form method="POST">
         <label>Genres you like:</label><br>
         <input type="text" name="likes"><br><br>

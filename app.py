@@ -5,6 +5,9 @@ import google.genai as genai
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 import sqlite3
+from database import get_recent_decisions
+from flask import jsonify
+# from database import get_decision_by_id
 
 load_dotenv()
 app = Flask(__name__)
@@ -35,53 +38,51 @@ def build_preference_object(form):
         "goal": normalize_value(form.get("goal"))
     }
     
-
-
 def evaluate_title(title, media_type, preferences):
     """Evaluates a title against user preferences using Gemini AI."""
     likes_str = ", ".join(preferences.get("likes", [])) or "None specified"
     dislikes_str = ", ".join(preferences.get("dislikes", [])) or "None specified"
     prompt = f"""
-You are an assistant that helps someone decide whether a movie or book is worth their time.
+        You are an assistant that helps someone decide whether a movie or book is worth their time.
 
-The user are considering the following title:
-Title: "{title}"
-Type: "{media_type}"  (movie or book)
+        The user are considering the following title:
+        Title: "{title}"
+        Type: "{media_type}"  (movie or book)
 
-Here are your preferences:
-- Likes: {likes_str}
-- Dislikes: {dislikes_str}
-- Preferred pace: {preferences.get('pace', 'Not specified')}
-- Emotional tolerance: {preferences.get('emotional_tolerance', 'Not specified')}
-- Goal: {preferences.get('goal', 'Not specified')}
+        Here are your preferences:
+        - Likes: {likes_str}
+        - Dislikes: {dislikes_str}
+        - Preferred pace: {preferences.get('pace', 'Not specified')}
+        - Emotional tolerance: {preferences.get('emotional_tolerance', 'Not specified')}
+        - Goal: {preferences.get('goal', 'Not specified')}
 
-Your task:
-Evaluate whether the user is likely to enjoy this title.
+        Your task:
+        Evaluate whether the user is likely to enjoy this title.
 
-Rules:
-- Do NOT include spoilers.
-- Do NOT include fluff or unnecessary commentary.
-- Base your reasoning strictly on the user's preferences.
-- If information about the title is limited, say so clearly.
-- Address the user in the second person point of view ("you")
+        Rules:
+        - Do NOT include spoilers.
+        - Do NOT include fluff or unnecessary commentary.
+        - Base your reasoning strictly on the user's preferences.
+        - If information about the title is limited, say so clearly.
+        - Address the user in the second person point of view ("you")
 
-OUTPUT FORMAT:
-You MUST respond with a valid JSON object and nothing else.
-Do NOT include markdown.
-Do NOT include explanations outside the JSON.
+        OUTPUT FORMAT:
+        You MUST respond with a valid JSON object and nothing else.
+        Do NOT include markdown.
+        Do NOT include explanations outside the JSON.
 
-The JSON object MUST have exactly these fields:
-- verdict: one of "Yes", "No", or "Maybe"
-- confidence: a number between 0 and 1
-- reasoning: a short string explaining the decision
-- potential_mismatches: an array of short strings (empty if none)
+        The JSON object MUST have exactly these fields:
+        - verdict: one of "Yes", "No", or "Maybe"
+        - confidence: a number between 0 and 1
+        - reasoning: a short string explaining the decision
+        - potential_mismatches: an array of short strings (empty if none)
 
-If the information is insufficient, return "Maybe" with a lower confidence.
+        If the information is insufficient, return "Maybe" with a lower confidence.
 
-Respond ONLY with the JSON object.
-"""
-    if not GEMINI_API_KEY:
-        return "Error: GEMINI_API_KEY not configured"
+        Respond ONLY with the JSON object.
+    """
+    # if not GEMINI_API_KEY:
+    #     return "Error: GEMINI_API_KEY not configured"
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
@@ -97,34 +98,23 @@ Respond ONLY with the JSON object.
         print(f"Error calling Gemini API: {type(e).__name__}: {e}")
         return f"Error: {str(e)}"
 
-@app.route("/", methods=["GET", "POST"])
-def preferences():
-    gemini_response = None
-    evaluated_title = None
-    if request.method == "POST":
-        user_preferences = build_preference_object(request.form)
-        evaluated_title = "Cinderella"
-        media_type = "movie"
-        raw_response = evaluate_title(evaluated_title, media_type, user_preferences)
-        cleaned_response = clean_gemini_response(raw_response)
-        try:
-            parsed = json.loads(cleaned_response)
-        except Exception as e:
-            print(f"Failed to parse Gemini JSON: {e}")
-            parsed = {}
-        gemini_response = format_verdict(parsed)
-        decision = {
-        "title": evaluated_title,
-        "media_type": media_type,
-        "verdict": parsed["verdict"],
-        "confidence": parsed["confidence"],
-        "reasoning": parsed["reasoning"],
-        "potential_mismatches": parsed["potential_mismatches"],
-        "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        save_decision(decision)
-    return render_template("index.html", gemini_response=gemini_response, evaluated_title=evaluated_title)
+@app.route("/decide", methods=["POST"])
+def handle_decision():
+    data = request.get_json()
 
+    item_name = data.get('item_name')
+    raw_prefs = data.get('preferences')
+
+    if not item_name or not raw_prefs:
+        return jsonify({"error": "Missing item_name or preferences"}), 400
+    
+    success, message_or_data = run_decision_pipeline(raw_prefs, item_name)
+
+    if success:
+        return jsonify({"success": "success", "data": message_or_data}), 201
+    else:
+        return jsonify({"status": "error", "message": message_or_data}), 400
+    
 def clean_gemini_response(text):
     """Removes markdown code fences from Gemini response if present."""
     if not text:
@@ -161,17 +151,11 @@ def load_history(filepath="data/history.json"):
     except (json.JSONDecodeError, IOError):
         return []
 
-# def save_decision(decision, filepath="data/history.json"):
-#     history = load_history(filepath)
-#     history.append(decision)
-
-#     with open(filepath, "w", encoding="utf-8") as f:
-#         json.dump(history, f, indent=2)
 def validate_decision(decision):
     """Checks if a decision dict is valid for saving."""
     REQUIRED_FIELDS = [
-        "title", "media_type", "verdict", "confidence",
-        "reasoning", "potential_mismatches", "timestamp"
+        "item_title", "item_type", "verdict", "confidence",
+        "reasoning", "potential_mismatches", "created_at"
     ]
 
     # Check required fields
@@ -188,11 +172,11 @@ def validate_decision(decision):
         return False
 
     # Validate timestamp
-    if not is_valid_timestamp_string(decision["timestamp"]):
+    if not is_valid_timestamp_string(decision["created_at"]):
         return False
 
     # Validate non-empty strings
-    for field in ["title", "media_type", "reasoning"]:
+    for field in ["item_title", "item_type", "reasoning"]:
         if not isinstance(decision[field], str) or not decision[field].strip():
             return False
 
@@ -240,6 +224,7 @@ def save_decision(decision):
         # Serialize potential_mismatches to JSON string
         mismatches_json = json.dumps(decision["potential_mismatches"], ensure_ascii=False)
         with conn:
+        # this ensures the connection closes even if the code crashes
             cursor.execute(
                 '''
                 INSERT INTO decisions (
@@ -247,42 +232,82 @@ def save_decision(decision):
                 ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''',
                 (
-                    decision["title"],
-                    decision["media_type"],
+                    decision["item_title"],
+                    decision["item_type"],
                     decision["verdict"],
                     decision["confidence"],
                     decision["reasoning"],
                     mismatches_json,
-                    decision["timestamp"]
+                    decision["created_at"]
                 )
             )
         return True
+    except sqlite3.Error as e:
+        print(f"SQLite error: {e}")
+        return False
     except Exception as e:
-        print(f"Error saving decision: {e}")
+        print(f"Other error: {e}")
         return False
     finally:
         conn.close()
 
-@app.route("/history")
-def history():
-    conn = sqlite3.connect('my_database.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT item_title, item_type, verdict, confidence, reasoning, potential_mismatches, created_at FROM decisions')
-    rows = cursor.fetchall()
-    decisions = []
-    for row in rows:
-        decisions.append({
-            "title": row[0],
-            "media_type": row[1],
-            "verdict": row[2],
-            "confidence": row[3],
-            "reasoning": row[4],
-            "potential_mismatches": json.loads(row[5]),
-            "timestamp": row[6]
-        })
-    conn.close()
-    return render_template("history.html", decisions=decisions)
+@app.route('/history', methods=['GET'])
+def view_history():
+    # Set a reasonable maximum limit
+    MAX_LIMIT = 50
+    limit = request.args.get('limit', default=5, type=int)
+    # Clamp the limit to the maximum allowed
+    limit = min(max(limit, 1), MAX_LIMIT)
+    decisions = get_recent_decisions(limit)
+    return jsonify(decisions)
 
+    # return render_template("history.html", decisions=decisions)
+
+
+# result = get_decision_by_id(1)
+# print(result)
+
+def run_decision_pipeline(raw_prefs, item_name):
+    # 1. Build and normalize preference object from raw input
+    preferences = build_preference_object(raw_prefs)
+
+    # 2. Call your AI function using the cleaned data
+    raw_response = evaluate_title(item_name, "movie", preferences)
+
+    # 3. Clean and parse the AI response
+    cleaned_response = clean_gemini_response(raw_response)
+    try:
+        parsed = json.loads(cleaned_response)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse Gemini JSON: {e}")
+        return (False, "Invalid JSON structure from AI")
+    except Exception as e:
+        print(f"Unexpected error parsing Gemini JSON: {e}")
+        return (False, "AI provider unreachable")
+
+    # Prepare decision dict
+    decision = {
+        "item_title": item_name,
+        "item_type": "movie",
+        "verdict": parsed.get("verdict"),
+        "confidence": parsed.get("confidence"),
+        "reasoning": parsed.get("reasoning"),
+        "potential_mismatches": parsed.get("potential_mismatches"),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    # 4. Call your validation function on the AI response
+    is_valid = validate_decision(decision)
+
+    if not is_valid:
+        # Try to give a more specific reason if possible
+        return (False, "Validation failed: Decision data did not meet requirements")
+
+    # 5. Call your saving function
+    if save_decision(decision):
+        return (True, "Decision processed and saved")
+    else:
+        return (False, "Failed to save decision to database")
 
 if __name__ == '__main__':
     init_db()
