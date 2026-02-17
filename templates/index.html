@@ -1,51 +1,190 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Pick or Pass - Preferences</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial scale=1.0">
+    <title>Pick or Pass</title>
+
 </head>
 <body>
-    <h1>User Preferences</h1>
-    <a href="/history">View past decisions</a>
+    <h1>Pick or Pass</h1>
 
-    {% if save_error %}
-    <div style="color: red; margin-bottom: 20px;">{{ save_error }}</div>
-    {% endif %}
-    <form method="POST">
-        <label>Genres you like:</label><br>
-        <input type="text" name="likes"><br><br>
+    <!-- User Preferences Section -->
+    <section>
+        <h2>Your Preferences</h2>
+        {% if save_error %}
+        <div style="color: red; margin-bottom: 20px;">{{ save_error }}</div>
+        {% endif %}
+        <form id="preferencesForm" method="POST">
+            <label>Genres you like:</label><br>
+            <input type="text" name="likes"><br><br>
 
-        <label>Genres you dislike:</label><br>
-        <input type="text" name="dislikes"><br><br>
+            <label>Genres you dislike:</label><br>
+            <input type="text" name="dislikes"><br><br>
 
-        <label>Preferred pace:</label><br>
-        <select name="pace">
-            <option value="slow">Slow</option>
-            <option value="medium">Medium</option>
-            <option value="fast">Fast</option>
-        </select><br><br>
+            <label>Preferred pace:</label><br>
+            <select name="pace">
+                <option value="slow">Slow</option>
+                <option value="medium">Medium</option>
+                <option value="fast">Fast</option>
+            </select><br><br>
 
-        <label>Emotional tolerance:</label><br>
-        <select name="emotional_tolerance">
-            <option value="light">Light</option>
-            <option value="moderate">Moderate</option>
-            <option value="heavy">Heavy</option>
-        </select><br><br>
+            <label>Emotional tolerance:</label><br>
+            <select name="emotional_tolerance">
+                <option value="light">Light</option>
+                <option value="moderate">Moderate</option>
+                <option value="heavy">Heavy</option>
+            </select><br><br>
 
-        <label>Why do you consume media?</label><br>
-        <select name="goal">
-            <option value="relax">Relax</option>
-            <option value="think">Think</option>
-            <option value="escape">Escape</option>
-        </select><br><br>
+            <label>Why do you consume media?</label><br>
+            <select name="goal">
+                <option value="relax">Relax</option>
+                <option value="think">Think</option>
+                <option value="escape">Escape</option>
+            </select><br><br>
 
-        <button type="submit">Save Preferences</button>
-    </form>
+            <button type="submit">Save Preferences</button>
+        </form>
+    </section>
 
-    {% if gemini_response %}
-    <div style="margin-top: 30px; padding: 20px; border: 1px solid #ccc; background-color: #f9f9f9;">
-        <h2>Gemini Evaluation for "{{ evaluated_title }}"</h2>
-        <pre style="white-space: pre-wrap; word-wrap: break-word;">{{ gemini_response }}</pre>
-    </div>
-    {% endif %}
+    <!-- Title Evaluation Section -->
+    <section>
+        <h2>Evaluate a Title</h2>
+        <form id="evaluationForm">
+            <label>Title:</label><br>
+            <input type="text" id="itemName" name="item_name" required><br><br>
+
+            <label>Type:</label><br>
+            <select id="itemType" name="item_type">
+                <option value="movie">Movie</option>
+                <option value="book">Book</option>
+            </select><br><br>
+
+            <button type="submit">Get Recommendation</button>
+        </form>
+    </section>
+
+    <!-- Decision Result Section -->
+    <section id="decisionResult" style="display: none;">
+        <h2>Decision Result</h2>
+        <div id="verdict"></div>
+        <div id="confidence"></div>
+        <div id="reasoning"></div>
+        <div id="mismatches"></div>
+    </section>
+
+    <!-- History Section -->
+    <section>
+        <h2>Past Decisions</h2>
+        <button id="loadHistoryBtn">Load History</button>
+        <div id="historyContainer"></div>
+    </section>
+
+    <script>
+        // Prevent preferences form from submitting
+        document.getElementById('preferencesForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            alert('Preferences saved! Now evaluate a title below.');
+        });
+
+        // Handle evaluation form submission
+        document.getElementById('evaluationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const itemName = document.getElementById('itemName').value;
+            const itemType = document.getElementById('itemType').value;
+
+            // Get preferences from form
+            const preferencesForm = document.getElementById('preferencesForm');
+            const preferences = {
+                likes: preferencesForm.querySelector('[name="likes"]').value,
+                dislikes: preferencesForm.querySelector('[name="dislikes"]').value,
+                pace: preferencesForm.querySelector('[name="pace"]').value,
+                emotional_tolerance: preferencesForm.querySelector('[name="emotional_tolerance"]').value,
+                goal: preferencesForm.querySelector('[name="goal"]').value
+            };
+
+            try {
+                const response = await fetch('/decide', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        item_name: itemName,
+                        item_type: itemType,
+                        preferences: preferences
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.data) {
+                    displayDecision(data.data);
+                } else {
+                    alert('Error: ' + (data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error submitting decision: ' + error.message);
+            }
+        });
+
+        function displayDecision(decisionData) {
+            const resultSection = document.getElementById('decisionResult');
+            const verdictDiv = document.getElementById('verdict');
+            const confidenceDiv = document.getElementById('confidence');
+            const reasoningDiv = document.getElementById('reasoning');
+            const mismatchesDiv = document.getElementById('mismatches');
+
+            verdictDiv.innerHTML = `<strong>Verdict:</strong> ${decisionData.verdict}`;
+            confidenceDiv.innerHTML = `<strong>Confidence:</strong> ${(decisionData.confidence * 100).toFixed(1)}%`;
+            reasoningDiv.innerHTML = `<strong>Reasoning:</strong> ${decisionData.reasoning}`;
+
+            let mismatchesHTML = '<strong>Potential Concerns:</strong>';
+            if (decisionData.potential_mismatches && decisionData.potential_mismatches.length > 0) {
+                mismatchesHTML += '<ul>';
+                decisionData.potential_mismatches.forEach(mismatch => {
+                    mismatchesHTML += `<li>${mismatch}</li>`;
+                });
+                mismatchesHTML += '</ul>';
+            } else {
+                mismatchesHTML += '<p>None</p>';
+            }
+            mismatchesDiv.innerHTML = mismatchesHTML;
+
+            resultSection.style.display = 'block';
+        }
+
+        // Handle history loading
+        document.getElementById('loadHistoryBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/history?limit=10');
+                const decisions = await response.json();
+
+                const historyContainer = document.getElementById('historyContainer');
+                historyContainer.innerHTML = '';
+
+                if (decisions.length === 0) {
+                    historyContainer.innerHTML = '<p>No past decisions yet.</p>';
+                    return;
+                }
+
+                decisions.forEach(decision => {
+                    const decisionEl = document.createElement('div');
+                    decisionEl.innerHTML = `
+                        <h4>${decision.item_title} (${decision.item_type})</h4>
+                        <p><strong>Verdict:</strong> ${decision.verdict}</p>
+                        <p><strong>Confidence:</strong> ${(decision.confidence * 100).toFixed(1)}%</p>
+                        <p><strong>Reasoning:</strong> ${decision.reasoning}</p>
+                        <p><strong>Date:</strong> ${new Date(decision.created_at).toLocaleString()}</p>
+                        <hr>
+                    `;
+                    historyContainer.appendChild(decisionEl);
+                });
+            } catch (error) {
+                alert('Error loading history: ' + error.message);
+            }
+        });
+    </script>
 </body>
 </html>

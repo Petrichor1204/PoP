@@ -86,7 +86,7 @@ def evaluate_title(title, media_type, preferences):
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
-            model='gemini-2.0-flash-exp',
+            model='gemini-2.0-flash',
             contents=prompt
         )
         if hasattr(response, 'text'):
@@ -98,22 +98,28 @@ def evaluate_title(title, media_type, preferences):
         print(f"Error calling Gemini API: {type(e).__name__}: {e}")
         return f"Error: {str(e)}"
 
+@app.route("/", methods=["GET"])
+def home():
+    return render_template("index.html")
+
+
 @app.route("/decide", methods=["POST"])
 def handle_decision():
     data = request.get_json()
 
     item_name = data.get('item_name')
     raw_prefs = data.get('preferences')
+    item_type = data.get("item_type", "movie")
 
     if not item_name or not raw_prefs:
         return jsonify({"error": "Missing item_name or preferences"}), 400
     
-    success, message_or_data = run_decision_pipeline(raw_prefs, item_name)
+    success, result = run_decision_pipeline(raw_prefs, item_name, item_type)
 
     if success:
-        return jsonify({"success": "success", "data": message_or_data}), 201
+        return jsonify({"success": "success", "data": result}), 201
     else:
-        return jsonify({"status": "error", "message": message_or_data}), 400
+        return jsonify({"status": "error", "message": result}), 400
     
 def clean_gemini_response(text):
     """Removes markdown code fences from Gemini response if present."""
@@ -267,12 +273,12 @@ def view_history():
 # result = get_decision_by_id(1)
 # print(result)
 
-def run_decision_pipeline(raw_prefs, item_name):
+def run_decision_pipeline(raw_prefs, item_name, item_type="movie"):
     # 1. Build and normalize preference object from raw input
     preferences = build_preference_object(raw_prefs)
 
     # 2. Call your AI function using the cleaned data
-    raw_response = evaluate_title(item_name, "movie", preferences)
+    raw_response = evaluate_title(item_name, item_type, preferences)
 
     # 3. Clean and parse the AI response
     cleaned_response = clean_gemini_response(raw_response)
@@ -288,7 +294,7 @@ def run_decision_pipeline(raw_prefs, item_name):
     # Prepare decision dict
     decision = {
         "item_title": item_name,
-        "item_type": "movie",
+        "item_type": item_type,
         "verdict": parsed.get("verdict"),
         "confidence": parsed.get("confidence"),
         "reasoning": parsed.get("reasoning"),

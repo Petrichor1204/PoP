@@ -1,0 +1,14 @@
+# Environment Variables (Security!)
+.env
+
+# Python Virtual Environment
+venv/
+__pycache__/
+*.py[cod]
+
+# Local Database
+my_database.db
+
+# OS Specific files
+.DS_Store
+Thumbs.db
