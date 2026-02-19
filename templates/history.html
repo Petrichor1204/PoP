@@ -1,39 +1,44 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>PoP - History</title>
-</head>
-<body>
-    <h1>Past Decisions</h1>
+{% extends "base.html" %}
 
-    {% if decisions %}
-        <ul>
-        {% for d in decisions %}
-            <li>
-                <strong>{{ d.item_title }}</strong> ({{ d.item_type }})<br>
-                Verdict: {{ d.verdict }} ({{ d.confidence }})<br>
-                Reason: {{ d.reasoning }}<br>
+{% block title %}Settings - Pick or Pass{% endblock %}
 
-                {% if d.potential_mismatches %}
-                    Concerns:
-                    <ul>
-                        {% for item in d.potential_mismatches %}
-                            <li>{{ item }}</li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    Concerns: None
-                {% endif %}
+{% block content %}
+    <!-- History Section -->
+    <section>
+        <h2>Past Decisions</h2>
+        <button id="loadHistoryBtn">Load History</button>
+        <div id="historyContainer"></div>
+    </section>
+    <script>
+        // Handle history loading
+        document.getElementById('loadHistoryBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/history?limit=10');
+                const decisions = await response.json();
 
-                <small>Checked on {{ d.created_at }}</small>
-            </li>
-            <hr>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>No past decisions yet.</p>
-    {% endif %}
+                const historyContainer = document.getElementById('historyContainer');
+                historyContainer.innerHTML = '';
 
-    <a href="/">Back to home</a>
-</body>
-</html>
+                if (decisions.length === 0) {
+                    historyContainer.innerHTML = '<p>No past decisions yet.</p>';
+                    return;
+                }
+
+                decisions.forEach(decision => {
+                    const decisionEl = document.createElement('div');
+                    decisionEl.innerHTML = `
+                        <h4>${decision.item_title} (${decision.item_type})</h4>
+                        <p><strong>Verdict:</strong> ${decision.verdict}</p>
+                        <p><strong>Confidence:</strong> ${(decision.confidence * 100).toFixed(1)}%</p>
+                        <p><strong>Reasoning:</strong> ${decision.reasoning}</p>
+                        <p><strong>Date:</strong> ${new Date(decision.created_at).toLocaleString()}</p>
+                        <hr>
+                    `;
+                    historyContainer.appendChild(decisionEl);
+                });
+            } catch (error) {
+                alert('Error loading history: ' + error.message);
+            }
+        });
+    </script>
+{% endblock %}

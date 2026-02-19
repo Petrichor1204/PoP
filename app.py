@@ -4,8 +4,8 @@ from flask import Flask, render_template, request
 import google.genai as genai
 from dotenv import load_dotenv
 from datetime import datetime, timezone
-import sqlite3
-from database import get_recent_decisions
+import database
+from utils import normalize_value, validate_preferences, validate_decision
 from flask import jsonify
 # from database import get_decision_by_id
 
@@ -17,17 +17,6 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     print("Warning: GEMINI_API_KEY not found in environment variables")
 
-def normalize_value(value, as_list=False):
-    """Normalize a string value: strip whitespace, convert to lowercase. Optionally split comma-separated values into a list."""
-    if value is None:
-        return [] if as_list else None
-    normalized = str(value).strip().lower()
-    if not normalized:
-        return [] if as_list else None
-    if as_list:
-        return [item.strip() for item in normalized.split(",") if item.strip()]
-    return normalized
-
 def build_preference_object(form):
     """Builds a cleaned and normalized preference object from form data."""
     return {
@@ -37,7 +26,43 @@ def build_preference_object(form):
         "emotional_tolerance": normalize_value(form.get("emotional_tolerance")),
         "goal": normalize_value(form.get("goal"))
     }
+
+
+def handle_preferences(form):
+    preferences = build_preference_object(form)
+
+    if not validate_preferences(preferences):
+        return False, "Invalid preferences"
     
+    success = database.save_preferences(preferences)
+    if not success:
+        return False, "Failed to save preference to database"
+    return True, preferences
+
+def clean_gemini_response(text):
+    """Removes markdown code fences from Gemini response if present."""
+    if not text:
+        return None
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()[1:-1]
+        text = "\n".join(lines)
+    return text
+
+def format_verdict(result):
+    verdict_map = {"Yes": "PICK", "No": "PASS", "Maybe": "MAYBE"}
+    verdict = verdict_map.get(result.get("verdict"), "MAYBE")
+    confidence = result.get("confidence", 0)
+    reasoning = result.get("reasoning", "")
+    mismatches = result.get("potential_mismatches", [])
+    lines = [f"{verdict} (Confidence: {confidence:.2f})\n", "Why:", reasoning]
+    lines.append("\nPotential concerns:")
+    if mismatches:
+        lines.extend([f"- {item}" for item in mismatches])
+    else:
+        lines.append("- None")
+    return "\n".join(lines)
+
 def evaluate_title(title, media_type, preferences):
     """Evaluates a title against user preferences using Gemini AI."""
     likes_str = ", ".join(preferences.get("likes", [])) or "None specified"
@@ -45,7 +70,7 @@ def evaluate_title(title, media_type, preferences):
     prompt = f"""
         You are an assistant that helps someone decide whether a movie or book is worth their time.
 
-        The user are considering the following title:
+        The user is considering the following title:
         Title: "{title}"
         Type: "{media_type}"  (movie or book)
 
@@ -98,180 +123,6 @@ def evaluate_title(title, media_type, preferences):
         print(f"Error calling Gemini API: {type(e).__name__}: {e}")
         return f"Error: {str(e)}"
 
-@app.route("/", methods=["GET"])
-def home():
-    return render_template("index.html")
-
-
-@app.route("/decide", methods=["POST"])
-def handle_decision():
-    data = request.get_json()
-
-    item_name = data.get('item_name')
-    raw_prefs = data.get('preferences')
-    item_type = data.get("item_type", "movie")
-
-    if not item_name or not raw_prefs:
-        return jsonify({"error": "Missing item_name or preferences"}), 400
-    
-    success, result = run_decision_pipeline(raw_prefs, item_name, item_type)
-
-    if success:
-        return jsonify({"success": "success", "data": result}), 201
-    else:
-        return jsonify({"status": "error", "message": result}), 400
-    
-def clean_gemini_response(text):
-    """Removes markdown code fences from Gemini response if present."""
-    if not text:
-        return None
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()[1:-1]
-        text = "\n".join(lines)
-    return text
-
-def format_verdict(result):
-    verdict_map = {"Yes": "PICK", "No": "PASS", "Maybe": "MAYBE"}
-    verdict = verdict_map.get(result.get("verdict"), "MAYBE")
-    confidence = result.get("confidence", 0)
-    reasoning = result.get("reasoning", "")
-    mismatches = result.get("potential_mismatches", [])
-    lines = [f"{verdict} (Confidence: {confidence:.2f})\n", "Why:", reasoning]
-    lines.append("\nPotential concerns:")
-    if mismatches:
-        lines.extend([f"- {item}" for item in mismatches])
-    else:
-        lines.append("- None")
-    return "\n".join(lines)
-
-
-def load_history(filepath="data/history.json"):
-    if not os.path.exists(filepath):
-        return []
-
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, IOError):
-        return []
-
-def validate_decision(decision):
-    """Checks if a decision dict is valid for saving."""
-    REQUIRED_FIELDS = [
-        "item_title", "item_type", "verdict", "confidence",
-        "reasoning", "potential_mismatches", "created_at"
-    ]
-
-    # Check required fields
-    if not all(field in decision for field in REQUIRED_FIELDS):
-        return False
-
-    # Validate confidence
-    confidence = decision["confidence"]
-    if not isinstance(confidence, (int, float)) or not (0 <= confidence <= 1):
-        return False
-
-    # Validate verdict
-    if decision["verdict"] not in {"Yes", "No", "Maybe"}:
-        return False
-
-    # Validate timestamp
-    if not is_valid_timestamp_string(decision["created_at"]):
-        return False
-
-    # Validate non-empty strings
-    for field in ["item_title", "item_type", "reasoning"]:
-        if not isinstance(decision[field], str) or not decision[field].strip():
-            return False
-
-    # Validate mismatches is a list
-    if not isinstance(decision["potential_mismatches"], list):
-        return False
-
-    return True
-
-def is_valid_timestamp_string(timestamp_str):
-    try:
-        datetime.fromisoformat(timestamp_str)
-        return True
-    except ValueError:
-        return False
-
-def init_db():
-    conn = sqlite3.connect('my_database.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS decisions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_title TEXT,
-            item_type TEXT,
-            verdict TEXT,
-            confidence REAL,
-            reasoning TEXT,
-            potential_mismatches TEXT,
-            created_at TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-
-def save_decision(decision):
-    """Validate and save a decision to the SQLite database using a transaction."""
-    if not validate_decision(decision):
-        print("Decision is invalid, not saving.")
-        return False
-
-    try:
-        conn = sqlite3.connect('my_database.db')
-        cursor = conn.cursor()
-        # Serialize potential_mismatches to JSON string
-        mismatches_json = json.dumps(decision["potential_mismatches"], ensure_ascii=False)
-        with conn:
-        # this ensures the connection closes even if the code crashes
-            cursor.execute(
-                '''
-                INSERT INTO decisions (
-                    item_title, item_type, verdict, confidence, reasoning, potential_mismatches, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''',
-                (
-                    decision["item_title"],
-                    decision["item_type"],
-                    decision["verdict"],
-                    decision["confidence"],
-                    decision["reasoning"],
-                    mismatches_json,
-                    decision["created_at"]
-                )
-            )
-        return True
-    except sqlite3.Error as e:
-        print(f"SQLite error: {e}")
-        return False
-    except Exception as e:
-        print(f"Other error: {e}")
-        return False
-    finally:
-        conn.close()
-
-@app.route('/history', methods=['GET'])
-def view_history():
-    # Set a reasonable maximum limit
-    MAX_LIMIT = 50
-    limit = request.args.get('limit', default=5, type=int)
-    # Clamp the limit to the maximum allowed
-    limit = min(max(limit, 1), MAX_LIMIT)
-    decisions = get_recent_decisions(limit)
-    return jsonify(decisions)
-
-    # return render_template("history.html", decisions=decisions)
-
-
-# result = get_decision_by_id(1)
-# print(result)
 
 def run_decision_pipeline(raw_prefs, item_name, item_type="movie"):
     # 1. Build and normalize preference object from raw input
@@ -310,11 +161,74 @@ def run_decision_pipeline(raw_prefs, item_name, item_type="movie"):
         return (False, "Validation failed: Decision data did not meet requirements")
 
     # 5. Call your saving function
-    if save_decision(decision):
-        return (True, "Decision processed and saved")
+    if database.save_decision(decision):
+        return (True, decision)
     else:
         return (False, "Failed to save decision to database")
 
+@app.route("/", methods=["GET"])
+def home():
+    return render_template("index.html")
+
+@app.route("/settings", methods=["GET"])
+def settings_page():
+    return render_template("preferences.html")
+
+@app.route("/past-decisions", methods=["GET"])
+def history_page():
+    return render_template("history.html")
+
+@app.route("/preferences", methods=["GET"])
+def view_preferences():
+    prefs = database.get_preferences()
+    return jsonify(prefs)
+
+@app.route("/decide", methods=["POST"])
+def handle_decision():
+    data = request.get_json()
+
+    item_name = data.get('item_name')
+    item_type = data.get("item_type", "movie")
+    raw_prefs = database.get_preferences()
+
+    if not item_name or not raw_prefs:
+        return jsonify({"error": "Missing item_name or preferences"}), 400
+    
+    success, result = run_decision_pipeline(raw_prefs, item_name, item_type)
+
+    if success:
+        return jsonify({"success": True, "data": result}), 201
+    else:
+        return jsonify({"success": False, "message": result}), 400
+    
+@app.route("/preferences", methods=["POST"])
+def update_preferences():
+    data = request.get_json()
+    preferences = build_preference_object(data)
+
+    if not validate_preferences(preferences):
+        return jsonify({"success": False, "message": "Invalid preferences format"}), 400
+
+    preferences["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    database.save_preferences(preferences)
+    return jsonify({"success": True, "message": "Preferences updated successfully!"})
+
+@app.route("/preferences", methods=["DELETE"])
+def remove_preferences():
+    database.delete_preferences()
+    return jsonify({"message": "Preferences deleted"})
+
+@app.route('/history', methods=['GET'])
+def view_history():
+    # Set a reasonable maximum limit
+    MAX_LIMIT = 50
+    limit = request.args.get('limit', default=5, type=int)
+    # Clamp the limit to the maximum allowed
+    limit = min(max(limit, 1), MAX_LIMIT)
+    decisions = database.get_recent_decisions(limit)
+    return jsonify(decisions)
+
 if __name__ == '__main__':
-    init_db()
+    database.init_db()
     app.run(debug=True)

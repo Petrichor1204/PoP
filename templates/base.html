@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Pick or Pass{% endblock %}</title>
+    <style>
+        nav { background: #333; color: white; padding: 1rem; margin-bottom: 2rem; }
+        nav a { color: white; margin-right: 15px; text-decoration: none; }
+        .content { max-width: 800px; margin: auto; padding: 0 20px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="/">Home</a>
+        <a href="/settings">Preferences</a>
+        <a href="/past-decisions">History</a>
+    </nav>
+
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

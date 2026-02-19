@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Pick or Pass{% endblock %}
+
+{% block content %}
+      <!-- User Preferences Section -->
+    <section>
+        <h2>Your Preferences</h2>
+        {% if save_error %}
+        <div style="color: red; margin-bottom: 20px;">{{ save_error }}</div>
+        {% endif %}
+        <form id="preferencesForm" method="POST">
+            <label>Genres you like:</label><br>
+            <input type="text" name="likes"><br><br>
+
+            <label>Genres you dislike:</label><br>
+            <input type="text" name="dislikes"><br><br>
+
+            <label>Preferred pace:</label><br>
+            <select name="pace">
+                <option value="slow">Slow</option>
+                <option value="medium">Medium</option>
+                <option value="fast">Fast</option>
+            </select><br><br>
+
+            <label>Emotional tolerance:</label><br>
+            <select name="emotional_tolerance">
+                <option value="light">Light</option>
+                <option value="moderate">Moderate</option>
+                <option value="heavy">Heavy</option>
+            </select><br><br>
+
+            <label>Why do you consume media?</label><br>
+            <select name="goal">
+                <option value="relax">Relax</option>
+                <option value="think">Think</option>
+                <option value="escape">Escape</option>
+            </select><br><br>
+
+            <button type="submit">Save Preferences</button>
+        </form>
+    </section>
+    
+    <script>
+        // Prevent preferences form from submitting
+        document.getElementById('preferencesForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            alert('Preferences saved! Now evaluate a title below.');
+        });
+
+        // Handle evaluation form submission
+        document.getElementById('evaluationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Get preferences from form
+            const preferencesForm = document.getElementById('preferencesForm');
+            const preferences = {
+                likes: preferencesForm.querySelector('[name="likes"]').value,
+                dislikes: preferencesForm.querySelector('[name="dislikes"]').value,
+                pace: preferencesForm.querySelector('[name="pace"]').value,
+                emotional_tolerance: preferencesForm.querySelector('[name="emotional_tolerance"]').value,
+                goal: preferencesForm.querySelector('[name="goal"]').value
+            };
+            try {
+                await fetch('/preferences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json'},
+                    body: JSON.stringify(preferences)
+                });
+            } catch (error) {
+                alert('Error getting preferences: ' + error.message);
+            }
+
+            
+        });
+    </script>
+{% endblock %}
