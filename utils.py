@@ -11,12 +11,36 @@ def normalize_value(value, as_list=False):
     return normalized
 
 def validate_preferences(preferences):
-    REQUIRED_FIELDS = ["likes", "dislikes", "pace", "emotional_tolerance", "goal"]
-    if not preferences: return False
+    REQUIRED_FIELDS = ["likes", "dislikes", "pace", "emotional_tolerance", "goal", "updated_at"]
+    if not preferences:
+        return False, "Missing preferences payload"
     for field in REQUIRED_FIELDS:
         if field not in preferences or preferences[field] is None:
-            return False
-    return True
+            return False, f"Missing required field: {field}"
+
+    if not isinstance(preferences["likes"], list) or not preferences["likes"]:
+        return False, "Likes must be a non-empty list"
+    if not isinstance(preferences["dislikes"], list) or not preferences["dislikes"]:
+        return False, "Dislikes must be a non-empty list"
+    for item in preferences["likes"]:
+        if not isinstance(item, str) or not item.strip():
+            return False, "Likes must contain non-empty strings"
+        if len(item.strip()) > 200:
+            return False, "Each like must be 200 characters or fewer"
+    for item in preferences["dislikes"]:
+        if not isinstance(item, str) or not item.strip():
+            return False, "Dislikes must contain non-empty strings"
+        if len(item.strip()) > 200:
+            return False, "Each dislike must be 200 characters or fewer"
+
+    for field in ["pace", "emotional_tolerance", "goal"]:
+        if not isinstance(preferences[field], str) or not preferences[field].strip():
+            return False, f"{field} must be a non-empty string"
+
+    if not is_valid_timestamp_string(preferences["updated_at"]):
+        return False, "updated_at must be a valid ISO timestamp"
+
+    return True, None
 
 def validate_decision(decision):
     """Checks if a decision dict is valid for saving."""
@@ -59,3 +83,34 @@ def is_valid_timestamp_string(timestamp_str):
         return True
     except ValueError:
         return False
+
+def validate_ai_response(parsed):
+    if not isinstance(parsed, dict):
+        return False, "AI response must be a JSON object"
+
+    required = {"verdict", "confidence", "reasoning", "potential_mismatches"}
+    if set(parsed.keys()) != required:
+        return False, "AI response must contain exactly the required keys"
+
+    if parsed["verdict"] not in {"Yes", "No", "Maybe"}:
+        return False, "Invalid verdict"
+
+    confidence = parsed["confidence"]
+    if isinstance(confidence, str):
+        try:
+            float(confidence)
+        except Exception:
+            return False, "Confidence must be a number"
+    elif not isinstance(confidence, (int, float)):
+        return False, "Confidence must be a number"
+
+    if not isinstance(parsed["reasoning"], str) or not parsed["reasoning"].strip():
+        return False, "Reasoning must be a non-empty string"
+
+    if not isinstance(parsed["potential_mismatches"], list):
+        return False, "potential_mismatches must be a list"
+    for item in parsed["potential_mismatches"]:
+        if not isinstance(item, str) or not item.strip():
+            return False, "potential_mismatches must be a list of strings"
+
+    return True, None

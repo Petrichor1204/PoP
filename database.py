@@ -1,4 +1,5 @@
 import sqlite3
+import json
 from utils import validate_preferences, validate_decision
 
 DB_NAME = "my_database.db"
@@ -39,9 +40,10 @@ def init_db():
 # ON CONFLICT is for updating existing values if the id is the same
 # exclude is to assing to new values when there's conflict
 def save_preferences(preferences):
-    if not validate_preferences(preferences):
-        print("Preferences invalid, not able to save.")
-        return False 
+    is_valid, error = validate_preferences(preferences)
+    if not is_valid:
+        print(f"Preferences invalid, not able to save: {error}")
+        return False
     
     try:
         conn = get_connection()
@@ -93,8 +95,14 @@ def get_preferences():
         return None
     
     d = dict(row)
-    d["likes"] = json.loads(d["likes"])
-    d["dislikes"] = json.loads(d["dislikes"])
+    try:
+        d["likes"] = json.loads(d["likes"])
+    except Exception:
+        d["likes"] = []
+    try:
+        d["dislikes"] = json.loads(d["dislikes"])
+    except Exception:
+        d["dislikes"] = []
 
     return d
 
@@ -163,9 +171,8 @@ def get_decision_by_id(decision_id):
     return row
 
 
-import json
 def get_recent_decisions(limit=5):
-    conn = sqlite3.connect('my_database.db')
+    conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,))

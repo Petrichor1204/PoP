@@ -95,12 +95,23 @@ def evaluate_title(title, media_type, preferences):
         You MUST respond with a valid JSON object and nothing else.
         Do NOT include markdown.
         Do NOT include explanations outside the JSON.
+        There are two possible response types:
 
-        The JSON object MUST have exactly these fields:
-        - verdict: one of "Yes", "No", or "Maybe"
-        - confidence: a number between 0 and 1
-        - reasoning: a short string explaining the decision
-        - potential_mismatches: an array of short strings (empty if none)
+        1) If the title is valid and recognizable:
+        {
+        "status": "valid",
+        "normalized_title": "...",
+        "verdict": "Yes" | "No" | "Maybe",
+        "confidence": number between 0 and 1,
+        "reasoning": a short string explaining the decision,
+        "potential_mismatches": an array of short strings (empty if none)
+        }
+
+        2) If the title appears misspelled or ambiguous:
+        {
+        "status": "suggestions",
+        "suggestions": ["Title 1", "Title 2", ...]
+        }
 
         If the information is insufficient, return "Maybe" with a lower confidence.
 

@@ -7,6 +7,7 @@
     <section>
         <h2>Past Decisions</h2>
         <button id="loadHistoryBtn">Load History</button>
+        <div id="statusMessage" class="status-message" style="display: none;"></div>
         <div id="historyContainer"></div>
     </section>
     <script>
@@ -17,7 +18,9 @@
                 const decisions = await response.json();
 
                 const historyContainer = document.getElementById('historyContainer');
+                const status = document.getElementById('statusMessage');
                 historyContainer.innerHTML = '';
+                status.style.display = "none";
 
                 if (decisions.length === 0) {
                     historyContainer.innerHTML = '<p>No past decisions yet.</p>';
@@ -26,18 +29,23 @@
 
                 decisions.forEach(decision => {
                     const decisionEl = document.createElement('div');
+                    const mismatches = (decision.potential_mismatches || []).map(m => `<li>${m}</li>`).join('');
                     decisionEl.innerHTML = `
                         <h4>${decision.item_title} (${decision.item_type})</h4>
                         <p><strong>Verdict:</strong> ${decision.verdict}</p>
                         <p><strong>Confidence:</strong> ${(decision.confidence * 100).toFixed(1)}%</p>
                         <p><strong>Reasoning:</strong> ${decision.reasoning}</p>
+                        <p><strong>Potential Concerns:</strong> ${mismatches ? `<ul>${mismatches}</ul>` : 'None'}</p>
                         <p><strong>Date:</strong> ${new Date(decision.created_at).toLocaleString()}</p>
                         <hr>
                     `;
                     historyContainer.appendChild(decisionEl);
                 });
             } catch (error) {
-                alert('Error loading history: ' + error.message);
+                const status = document.getElementById('statusMessage');
+                status.className = "status-message status-error";
+                status.innerText = 'Error loading history: ' + error.message;
+                status.style.display = "block";
             }
         });
     </script>

@@ -9,6 +9,7 @@
         {% if save_error %}
         <div style="color: red; margin-bottom: 20px;">{{ save_error }}</div>
         {% endif %}
+        <div id="statusMessage" class="status-message" style="display: none;"></div>
         <form id="preferencesForm" method="POST">
             <label>Genres you like:</label><br>
             <input type="text" name="likes"><br><br>
@@ -42,17 +43,38 @@
     </section>
     
     <script>
-        // Prevent preferences form from submitting
-        document.getElementById('preferencesForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            alert('Preferences saved! Now evaluate a title below.');
-        });
+        async function loadPreferences() {
+            const status = document.getElementById('statusMessage');
+            try {
+                const response = await fetch('/preferences');
+                const data = await response.json();
+                if (!response.ok) {
+                    status.className = "status-message status-error";
+                    status.innerText = data.message || 'No saved preferences yet.';
+                    status.style.display = "block";
+                    return;
+                }
+                const prefs = data.data;
+                const form = document.getElementById('preferencesForm');
+                form.querySelector('[name="likes"]').value = (prefs.likes || []).join(', ');
+                form.querySelector('[name="dislikes"]').value = (prefs.dislikes || []).join(', ');
+                form.querySelector('[name="pace"]').value = prefs.pace || 'medium';
+                form.querySelector('[name="emotional_tolerance"]').value = prefs.emotional_tolerance || 'moderate';
+                form.querySelector('[name="goal"]').value = prefs.goal || 'relax';
+                status.style.display = "none";
+            } catch (error) {
+                status.className = "status-message status-error";
+                status.innerText = 'Error loading preferences: ' + error.message;
+                status.style.display = "block";
+            }
+        }
 
-        // Handle evaluation form submission
-        document.getElementById('evaluationForm').addEventListener('submit', async (e) => {
+        document.getElementById('preferencesForm').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            // Get preferences from form
+            const status = document.getElementById('statusMessage');
+            status.style.display = "none";
+
             const preferencesForm = document.getElementById('preferencesForm');
             const preferences = {
                 likes: preferencesForm.querySelector('[name="likes"]').value,
@@ -62,16 +84,28 @@
                 goal: preferencesForm.querySelector('[name="goal"]').value
             };
             try {
-                await fetch('/preferences', {
+                const response = await fetch('/preferences', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json'},
                     body: JSON.stringify(preferences)
                 });
+                const data = await response.json();
+                if (!response.ok) {
+                    status.className = "status-message status-error";
+                    status.innerText = data.message || 'Error saving preferences.';
+                    status.style.display = "block";
+                    return;
+                }
+                status.className = "status-message status-success";
+                status.innerText = 'Preferences saved successfully.';
+                status.style.display = "block";
             } catch (error) {
-                alert('Error getting preferences: ' + error.message);
+                status.className = "status-message status-error";
+                status.innerText = 'Error saving preferences: ' + error.message;
+                status.style.display = "block";
             }
-
-            
         });
+
+        loadPreferences();
     </script>
 {% endblock %}

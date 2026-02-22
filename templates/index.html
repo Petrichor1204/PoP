@@ -22,6 +22,8 @@
 
     </section>
 
+    <div id="statusMessage" class="status-message" style="display: none;"></div>
+
     <!-- Decision Result Section -->
     <section id="decisionResult" style="display: none;">
         <h2>Decision Result</h2>
@@ -37,10 +39,13 @@
             const itemName = document.getElementById('itemName').value;
             const itemType = document.getElementById('itemType').value;
             const submitBtn = event.target.querySelector('button');
+            const status = document.getElementById('statusMessage');
 
             // Loading State: Professional touch for your GitHub
             submitBtn.disabled = true;
             submitBtn.innerText = "Analyzing...";
+            status.style.display = "none";
+            status.className = "status-message";
 
             try {
                 const response = await fetch('/decide', {
@@ -58,12 +63,17 @@
 
                 if (response.ok && data.data) {
                     displayDecision(data.data);
+                    status.style.display = "none";
                 } else {
-                    alert('Error: ' + (data.message || 'Unknown error'));
+                    status.className = "status-message status-error";
+                    status.innerText = data.message || 'Unknown error';
+                    status.style.display = "block";
                 }
 
             } catch (error) {
-                alert('Error submitting decision: ' + error.message);
+                status.className = "status-message status-error";
+                status.innerText = 'Error submitting decision: ' + error.message;
+                status.style.display = "block";
             } finally {
             // Re-enable the button
             submitBtn.disabled = false;
