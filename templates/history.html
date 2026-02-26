@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Settings - Pick or Pass{% endblock %}
+{% block title %}History - Pick or Pass{% endblock %}
 
 {% block content %}
     <!-- History Section -->
@@ -15,12 +15,21 @@
         document.getElementById('loadHistoryBtn').addEventListener('click', async () => {
             try {
                 const response = await fetch('/history?limit=10');
-                const decisions = await response.json();
+                const responseBody = await response.json();
 
                 const historyContainer = document.getElementById('historyContainer');
                 const status = document.getElementById('statusMessage');
                 historyContainer.innerHTML = '';
                 status.style.display = "none";
+
+                if (!response.ok) {
+                    status.className = "status-message status-error";
+                    status.innerText = (responseBody.error && responseBody.error.message) || 'Error loading history.';
+                    status.style.display = "block";
+                    return;
+                }
+
+                const decisions = (responseBody.data && responseBody.data.items) ? responseBody.data.items : [];
 
                 if (decisions.length === 0) {
                     historyContainer.innerHTML = '<p>No past decisions yet.</p>';

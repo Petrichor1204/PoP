@@ -11,35 +11,38 @@
         {% endif %}
         <div id="statusMessage" class="status-message" style="display: none;"></div>
         <form id="preferencesForm" method="POST">
-            <label>Genres you like:</label><br>
-            <input type="text" name="likes"><br><br>
+            <label>Genres you like</label>
+            <input type="text" name="likes">
 
-            <label>Genres you dislike:</label><br>
-            <input type="text" name="dislikes"><br><br>
+            <label>Genres you dislike</label>
+            <input type="text" name="dislikes">
 
-            <label>Preferred pace:</label><br>
+            <label>Preferred pace</label>
             <select name="pace">
                 <option value="slow">Slow</option>
                 <option value="medium">Medium</option>
                 <option value="fast">Fast</option>
-            </select><br><br>
+            </select>
 
-            <label>Emotional tolerance:</label><br>
+            <label>Emotional tolerance</label>
             <select name="emotional_tolerance">
                 <option value="light">Light</option>
                 <option value="moderate">Moderate</option>
                 <option value="heavy">Heavy</option>
-            </select><br><br>
+            </select>
 
-            <label>Why do you consume media?</label><br>
+            <label>Why do you consume media?</label>
             <select name="goal">
                 <option value="relax">Relax</option>
                 <option value="think">Think</option>
                 <option value="escape">Escape</option>
-            </select><br><br>
+            </select>
 
             <button type="submit">Save Preferences</button>
         </form>
+        <p style="margin-top: 12px;">
+            <a href="/">Go to Evaluate a Title</a>
+        </p>
     </section>
     
     <script>
@@ -50,7 +53,7 @@
                 const data = await response.json();
                 if (!response.ok) {
                     status.className = "status-message status-error";
-                    status.innerText = data.message || 'No saved preferences yet.';
+                    status.innerText = (data.error && data.error.message) || 'No saved preferences yet.';
                     status.style.display = "block";
                     return;
                 }
@@ -92,7 +95,7 @@
                 const data = await response.json();
                 if (!response.ok) {
                     status.className = "status-message status-error";
-                    status.innerText = data.message || 'Error saving preferences.';
+                    status.innerText = (data.error && data.error.message) || 'Error saving preferences.';
                     status.style.display = "block";
                     return;
                 }

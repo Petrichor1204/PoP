@@ -1,190 +1,303 @@
-import sqlite3
 import json
+from datetime import datetime, timezone
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    Float,
+    Boolean,
+    ForeignKey,
+    Text,
+    DateTime,
+    func,
+)
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from utils import validate_preferences, validate_decision
 
 DB_NAME = "my_database.db"
 
-def get_connection():
-    return sqlite3.connect(DB_NAME)
+def get_database_url():
+    return f"sqlite:///{DB_NAME}"
+
+Base = declarative_base()
+
+
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(100), unique=True, nullable=False)
+    email = Column(String(200), unique=True, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    profiles = relationship("PreferenceProfile", back_populates="user", cascade="all, delete-orphan")
+    decisions = relationship("Decision", back_populates="user", cascade="all, delete-orphan")
+
+
+class PreferenceProfile(Base):
+    __tablename__ = "preference_profiles"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    name = Column(String(100), nullable=False)
+    likes = Column(Text, nullable=False)
+    dislikes = Column(Text, nullable=False)
+    pace = Column(String(50), nullable=False)
+    emotional_tolerance = Column(String(50), nullable=False)
+    goal = Column(String(100), nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+    is_active = Column(Boolean, default=False)
+
+    user = relationship("User", back_populates="profiles")
+    decisions = relationship("Decision", back_populates="profile", cascade="all, delete-orphan")
+
+
+class Decision(Base):
+    __tablename__ = "decisions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    profile_id = Column(Integer, ForeignKey("preference_profiles.id"), nullable=True)
+    item_title = Column(String(200), nullable=False)
+    item_type = Column(String(20), nullable=False)
+    verdict = Column(String(10), nullable=False)
+    confidence = Column(Float, nullable=False)
+    reasoning = Column(Text, nullable=False)
+    potential_mismatches = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+
+    user = relationship("User", back_populates="decisions")
+    profile = relationship("PreferenceProfile", back_populates="decisions")
+
+
+def get_engine():
+    return create_engine(get_database_url(), connect_args={"check_same_thread": False})
+
+
+def get_session():
+    engine = get_engine()
+    SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    return SessionLocal()
+
 
 def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS decisions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            item_title TEXT,
-            item_type TEXT,
-            verdict TEXT,
-            confidence REAL,
-            reasoning TEXT,
-            potential_mismatches TEXT,
-            created_at TEXT
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS preferences (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            likes TEXT,
-            dislikes TEXT,
-            pace TEXT,
-            emotional_tolerance TEXT,
-            goal TEXT,
-            updated_at TEXT                     
-        )
-    ''')
-    conn.commit()
-    conn.close()
-    
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    ensure_default_user()
 
-# ON CONFLICT is for updating existing values if the id is the same
-# exclude is to assing to new values when there's conflict
-def save_preferences(preferences):
+
+def ensure_default_user():
+    session = get_session()
+    try:
+        existing = session.query(User).filter(User.id == 1).first()
+        if not existing:
+            user = User(id=1, username="default")
+            session.add(user)
+            session.commit()
+    finally:
+        session.close()
+
+
+def create_user(username, email=None):
+    session = get_session()
+    try:
+        user = User(username=username, email=email)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+    finally:
+        session.close()
+
+
+def get_user(user_id):
+    session = get_session()
+    try:
+        return session.query(User).filter(User.id == user_id).first()
+    finally:
+        session.close()
+
+
+def list_profiles(user_id):
+    session = get_session()
+    try:
+        profiles = session.query(PreferenceProfile).filter(PreferenceProfile.user_id == user_id).all()
+        return [_profile_to_dict(p) for p in profiles]
+    finally:
+        session.close()
+
+
+def set_active_profile(user_id, profile_id):
+    session = get_session()
+    try:
+        profiles = session.query(PreferenceProfile).filter(PreferenceProfile.user_id == user_id).all()
+        target = None
+        for profile in profiles:
+            if profile.id == profile_id:
+                target = profile
+                profile.is_active = True
+            else:
+                profile.is_active = False
+        if not target:
+            return False
+        session.commit()
+        return True
+    finally:
+        session.close()
+
+
+def save_preferences(preferences, user_id, profile_name="default"):
     is_valid, error = validate_preferences(preferences)
     if not is_valid:
         print(f"Preferences invalid, not able to save: {error}")
         return False
-    
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        with conn:
-            cursor.execute(
-                '''
-            INSERT INTO preferences (
-                id, likes, dislikes, pace, emotional_tolerance, goal, updated_at
-                ) VALUES (1, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    likes = excluded.likes,
-                    dislikes = excluded.dislikes,
-                    pace = excluded.pace,
-                    emotional_tolerance = excluded.emotional_tolerance,
-                    goal = excluded.goal,
-                    updated_at = excluded.updated_at
 
-                ''',
-                (
-                    json.dumps(preferences["likes"]),
-                    json.dumps(preferences["dislikes"]),
-                    preferences["pace"],
-                    preferences["emotional_tolerance"],
-                    preferences["goal"],
-                    preferences["updated_at"]
-                )
-            )
+    session = get_session()
+    try:
+        profile = (
+            session.query(PreferenceProfile)
+            .filter(PreferenceProfile.user_id == user_id, PreferenceProfile.name == profile_name)
+            .first()
+        )
+        if not profile:
+            profile = PreferenceProfile(user_id=user_id, name=profile_name)
+            session.add(profile)
+
+        profile.likes = json.dumps(preferences["likes"])
+        profile.dislikes = json.dumps(preferences["dislikes"])
+        profile.pace = preferences["pace"]
+        profile.emotional_tolerance = preferences["emotional_tolerance"]
+        profile.goal = preferences["goal"]
+        profile.updated_at = datetime.fromisoformat(preferences["updated_at"])
+
+        # Set this profile active; deactivate others
+        session.query(PreferenceProfile).filter(PreferenceProfile.user_id == user_id).update({"is_active": False})
+        profile.is_active = True
+
+        session.commit()
         return True
-    except sqlite3.Error as e:
-        print(f"SQLite error: {e}")
-        return False
     except Exception as e:
-        print(f"Other error: {e}")
+        print(f"Error saving preferences: {e}")
+        session.rollback()
         return False
     finally:
-        conn.close()
+        session.close()
 
-def get_preferences():
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM preferences WHERE id=1")
-    row = cursor.fetchone()
-    conn.close()
-
-    if not row:
-        return None
-    
-    d = dict(row)
+def get_preferences(user_id):
+    session = get_session()
     try:
-        d["likes"] = json.loads(d["likes"])
-    except Exception:
-        d["likes"] = []
+        profile = (
+            session.query(PreferenceProfile)
+            .filter(PreferenceProfile.user_id == user_id, PreferenceProfile.is_active.is_(True))
+            .first()
+        )
+        if not profile:
+            return None
+        return _profile_to_dict(profile)
+    finally:
+        session.close()
+
+
+def delete_preferences(user_id, profile_id=None):
+    session = get_session()
     try:
-        d["dislikes"] = json.loads(d["dislikes"])
-    except Exception:
-        d["dislikes"] = []
+        query = session.query(PreferenceProfile).filter(PreferenceProfile.user_id == user_id)
+        if profile_id:
+            query = query.filter(PreferenceProfile.id == profile_id)
+        else:
+            query = query.filter(PreferenceProfile.is_active.is_(True))
+        profile = query.first()
+        if not profile:
+            return False
+        session.delete(profile)
+        session.commit()
+        return True
+    finally:
+        session.close()
 
-    return d
 
-def delete_preferences():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("DELETE FROM preferences where id=1")
-    conn.commit()
-    conn.close()
-
-    return True
-
-def save_decision(decision):
-    """Validate and save a decision to the SQLite database using a transaction."""
+def save_decision(decision, user_id, profile_id=None):
     if not validate_decision(decision):
         print("Decision is invalid, not saving.")
         return False
 
+    session = get_session()
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        # Serialize potential_mismatches to JSON string
-        mismatches_json = json.dumps(decision["potential_mismatches"], ensure_ascii=False)
-        with conn:
-        # this ensures the connection closes even if the code crashes
-            cursor.execute(
-                '''
-                INSERT INTO decisions (
-                    item_title, item_type, verdict, confidence, reasoning, potential_mismatches, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''',
-                (
-                    decision["item_title"],
-                    decision["item_type"],
-                    decision["verdict"],
-                    decision["confidence"],
-                    decision["reasoning"],
-                    mismatches_json,
-                    decision["created_at"]
-                )
-            )
+        record = Decision(
+            user_id=user_id,
+            profile_id=profile_id,
+            item_title=decision["item_title"],
+            item_type=decision["item_type"],
+            verdict=decision["verdict"],
+            confidence=decision["confidence"],
+            reasoning=decision["reasoning"],
+            potential_mismatches=json.dumps(decision["potential_mismatches"], ensure_ascii=False),
+            created_at=datetime.fromisoformat(decision["created_at"]),
+        )
+        session.add(record)
+        session.commit()
         return True
-    except sqlite3.Error as e:
-        print(f"SQLite error: {e}")
-        return False
     except Exception as e:
-        print(f"Other error: {e}")
+        print(f"Error saving decision: {e}")
+        session.rollback()
         return False
     finally:
-        conn.close()
+        session.close()
 
 
-def get_decision_by_id(decision_id):
-    conn = get_connection()
-    cursor = conn.cursor()
+def get_recent_decisions(user_id, limit=5, offset=0, item_type=None, verdict=None, start=None, end=None):
+    session = get_session()
+    try:
+        query = session.query(Decision).filter(Decision.user_id == user_id)
+        if item_type:
+            query = query.filter(Decision.item_type == item_type)
+        if verdict:
+            query = query.filter(Decision.verdict == verdict)
+        if start:
+            query = query.filter(Decision.created_at >= start)
+        if end:
+            query = query.filter(Decision.created_at <= end)
 
-    cursor.execute(
-        "SELECT * FROM decisions WHERE id = ?",
-        (decision_id,)
-    )
+        total = query.with_entities(func.count(Decision.id)).scalar() or 0
+        rows = (
+            query.order_by(Decision.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
+        decisions = []
+        for row in rows:
+            decisions.append(_decision_to_dict(row))
 
-    row = cursor.fetchone()
-    conn.close()
-
-    return row
-
-
-def get_recent_decisions(limit=5):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM decisions ORDER BY created_at DESC LIMIT ?", (limit,))
-    rows = cursor.fetchall()
-    decisions = []
-    for row in rows:
-        d = dict(row)
-        d["potential_mismatches"] = json.loads(d["potential_mismatches"])
-        decisions.append(d)
-
-    conn.close()
-    return decisions
+        return decisions, total
+    finally:
+        session.close()
 
 
-  
+def _profile_to_dict(profile):
+    return {
+        "id": profile.id,
+        "user_id": profile.user_id,
+        "name": profile.name,
+        "likes": json.loads(profile.likes),
+        "dislikes": json.loads(profile.dislikes),
+        "pace": profile.pace,
+        "emotional_tolerance": profile.emotional_tolerance,
+        "goal": profile.goal,
+        "updated_at": profile.updated_at.isoformat(),
+        "is_active": profile.is_active,
+    }
+
+
+def _decision_to_dict(row):
+    return {
+        "id": row.id,
+        "user_id": row.user_id,
+        "profile_id": row.profile_id,
+        "item_title": row.item_title,
+        "item_type": row.item_type,
+        "verdict": row.verdict,
+        "confidence": row.confidence,
+        "reasoning": row.reasoning,
+        "potential_mismatches": json.loads(row.potential_mismatches),
+        "created_at": row.created_at.isoformat(),
+    }

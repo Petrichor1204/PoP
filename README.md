@@ -1,19 +1,21 @@
-
 # PoP
 
 Pick or Pass (PoP) is a Python web application that helps users decide whether a movie or book matches their personal preferences, using Google Gemini AI for evaluation.
 
 ## Features
 
-- Collects user preferences for genres, pace, emotional tolerance, and goals via a web form
-- Evaluates a hardcoded title ("Hustle") against user preferences using Gemini AI
-- Returns a verdict (PICK, PASS, MAYBE) with confidence and reasoning
-- Cleans and formats AI responses for user-friendly display
-- No spoilers or unnecessary commentary in AI output
+- Collects user preferences for genres, pace, emotional tolerance, and goals
+- Supports multiple preference profiles per user (one active at a time)
+- Evaluates any user-provided movie or book title using Gemini AI
+- Returns a verdict (Yes/No/Maybe) with confidence, reasoning, and potential mismatches
+- Stores preferences and decision history in SQLite
+- Simple UI for preferences, evaluation, and history
 
 ## Technologies Used
 
 - Flask (web framework)
+- SQLAlchemy (ORM)
+- Alembic (migrations)
 - Google Gemini AI (via google-genai)
 - python-dotenv (for environment variable management)
 
@@ -22,28 +24,22 @@ Pick or Pass (PoP) is a Python web application that helps users decide whether a
 ```
 PoP/
 ├── app.py                # Main application logic
+├── database.py           # DB models and data access
 ├── requirements.txt      # Python dependencies
-├── static/               # Static assets (CSS, JS, images)
-├── templates/
-│   └── index.html        # Main HTML template
+├── migrations/           # Alembic migrations
+├── templates/            # HTML templates
 ```
 
 ## How It Works
 
-1. User fills out a form specifying likes, dislikes, preferred pace, emotional tolerance, and goal for consuming media.
-2. On form submission, preferences are normalized and sent to Gemini AI to evaluate a hardcoded title ("Hustle", type: movie).
+1. User saves preferences (likes, dislikes, pace, emotional tolerance, goal).
+2. User submits a movie or book title for evaluation.
 3. Gemini AI responds with a JSON verdict, confidence score, reasoning, and potential mismatches.
-4. The app cleans and formats the response, displaying it on the web page.
-
-### Example Form Fields
-- Genres you like/dislike (comma-separated)
-- Preferred pace (slow, medium, fast)
-- Emotional tolerance (light, moderate, heavy)
-- Goal (relax, think, escape)
+4. The app validates, stores, and displays the result.
 
 ### Example Output
 ```
-PICK (Confidence: 0.85)
+Verdict: Yes (Confidence: 0.85)
 Why:
 You are likely to enjoy "Hustle" because it matches your preferences for fast-paced, motivational movies.
 
@@ -58,16 +54,11 @@ Potential concerns:
 - pip
 
 ### Installation
-1. Clone the repository:
-   ```bash
-   git clone <repo-url>
-   cd PoP
-   ```
-2. Install dependencies:
+1. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Set up your Gemini API key in a `.env` file:
+2. Set up your Gemini API key in a `.env` file:
    ```env
    GEMINI_API_KEY=your_api_key_here
    ```
@@ -79,12 +70,76 @@ Potential concerns:
    ```
 2. Open your browser and go to `http://localhost:5000`
 
-## File Details
+## Migrations
 
-- `app.py`: Flask app, Gemini API integration, form handling, response formatting
-- `requirements.txt`: Flask, google-genai, python-dotenv
-- `static/`: Static files (if any)
-- `templates/index.html`: Main HTML form and result display
+Initialize the DB schema with Alembic:
+```bash
+alembic upgrade head
+```
+
+## API Endpoints
+
+### Response Envelope
+All API responses use:
+```
+{
+  "success": true | false,
+  "data": any | null,
+  "error": { "message": string, "type": string } | null
+}
+```
+
+### Users
+- `POST /users`
+  - Request body:
+```
+{
+  "username": "alice",
+  "email": "alice@example.com"
+}
+```
+  - 201: `{success: true, data: {id, username, email}}`
+
+### Preferences
+- `GET /preferences` (uses `X-User-Id` header or `user_id` query param; defaults to `1`)
+  - 200: `{success: true, data: preferences}`
+  - 404: `{success: false, error: {message: "No saved preferences", type: "not_found"}}`
+- `POST /preferences`
+  - Request body:
+```
+{
+  "likes": "action, adventure",
+  "dislikes": "slow",
+  "pace": "fast",
+  "emotional_tolerance": "light",
+  "goal": "escape",
+  "profile_name": "default"
+}
+```
+  - 200: `{success: true, data: {message: "Preferences updated successfully!"}}`
+- `DELETE /preferences`
+  - 200: `{success: true, data: {message: "Preferences deleted"}}`
+
+### Profiles
+- `GET /profiles` (by user)
+- `POST /profiles` (creates profile and activates it)
+- `POST /profiles/<id>/activate`
+
+### Decisions
+- `POST /decide`
+  - Request body:
+```
+{
+  "item_name": "Dune",
+  "item_type": "movie"
+}
+```
+  - 201: `{success: true, data: decision}`
+  - 400: invalid input or ambiguous title (`error.type` may be `suggestions`)
+
+### History (pagination + filters)
+- `GET /history?limit=10&offset=0&type=movie&verdict=Yes&start=2026-01-01T00:00:00&end=2026-02-01T00:00:00`
+  - 200: `{success: true, data: {items: [...], pagination: {limit, offset, total}}}`
 
 ## License
 Specify your license here (e.g., MIT).

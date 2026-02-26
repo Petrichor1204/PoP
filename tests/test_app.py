@@ -39,6 +39,8 @@ def test_get_preferences_empty(client):
     assert res.status_code == 404
     body = res.get_json()
     assert body["success"] is False
+    assert body["data"] is None
+    assert body["error"]["message"] == "No saved preferences"
 
 
 def test_set_and_get_preferences(client):
@@ -46,11 +48,13 @@ def test_set_and_get_preferences(client):
     assert res.status_code == 200
     body = res.get_json()
     assert body["success"] is True
+    assert body["error"] is None
 
     res = client.get("/preferences")
     assert res.status_code == 200
     body = res.get_json()
     assert body["success"] is True
+    assert body["error"] is None
     assert body["data"]["pace"] == "fast"
     assert "updated_at" in body["data"]
 
@@ -60,6 +64,7 @@ def test_preferences_validation(client):
     assert res.status_code == 400
     body = res.get_json()
     assert body["success"] is False
+    assert body["data"] is None
 
 
 def test_decide_requires_preferences(client):
@@ -67,6 +72,7 @@ def test_decide_requires_preferences(client):
     assert res.status_code == 400
     body = res.get_json()
     assert body["success"] is False
+    assert body["data"] is None
 
 
 def test_decide_invalid_item_type(client):
@@ -75,6 +81,7 @@ def test_decide_invalid_item_type(client):
     assert res.status_code == 400
     body = res.get_json()
     assert body["success"] is False
+    assert body["error"]["message"] == "Invalid item_type"
 
 
 def test_decide_success(monkeypatch, client):
@@ -94,6 +101,7 @@ def test_decide_success(monkeypatch, client):
     assert res.status_code == 201
     body = res.get_json()
     assert body["success"] is True
+    assert body["error"] is None
     assert body["data"]["verdict"] == "Yes"
 
 
@@ -118,4 +126,25 @@ def test_decide_ai_repair(monkeypatch, client):
     assert res.status_code == 201
     body = res.get_json()
     assert body["success"] is True
+    assert body["error"] is None
     assert body["data"]["verdict"] == "Maybe"
+
+
+def test_history_pagination_empty(client):
+    res = client.get("/history?limit=10&offset=0")
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["success"] is True
+    assert body["error"] is None
+    assert "items" in body["data"]
+    assert "pagination" in body["data"]
+    assert body["data"]["pagination"]["limit"] == 10
+    assert body["data"]["pagination"]["offset"] == 0
+
+
+def test_invalid_user_id_header(client):
+    res = client.get("/preferences", headers={"X-User-Id": "not-an-int"})
+    assert res.status_code == 400
+    body = res.get_json()
+    assert body["success"] is False
+    assert body["error"]["message"] == "Invalid user_id"

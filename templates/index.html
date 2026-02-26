@@ -3,19 +3,20 @@
 {% block title %}Home - Pick or Pass{% endblock %}
 
 {% block content %}
-    <h1>Pick or Pop</h1>
+    <h1>Pick or Pass</h1>
     <!-- Title Evaluation Section -->
     <section>
         <h2>Evaluate a Title</h2>
+        <p>Need to set preferences first? <a href="/settings">Go to Preferences</a></p>
     <form id="evaluationForm">
-        <label for="itemName">Title:</label><br>
-        <input type="text" id="itemName" name="item_name" required><br><br>
+        <label for="itemName">Title</label>
+        <input type="text" id="itemName" name="item_name" required>
 
-        <label for="itemType">Type:</label><br>
+        <label for="itemType">Type</label>
         <select id="itemType" name="item_type">
             <option value="movie">Movie</option>
             <option value="book">Book</option>
-        </select><br><br>
+        </select>
 
         <button type="submit">Get Recommendation</button>
     </form>
@@ -66,7 +67,7 @@
                     status.style.display = "none";
                 } else {
                     status.className = "status-message status-error";
-                    status.innerText = data.message || 'Unknown error';
+                    status.innerText = (data.error && data.error.message) || 'Unknown error';
                     status.style.display = "block";
                 }
 
