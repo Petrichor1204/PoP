@@ -6,13 +6,6 @@ databases:
     ipAllowList: []   # empty = only allow connections from Render services internally
 
 services:
-  # ── Redis ────────────────────────────────────────────────
-  - type: redis
-    name: pop-redis
-    plan: free
-    maxmemoryPolicy: noeviction
-    ipAllowList: []   # empty = only allow connections from Render services internally
-
   # ── Web (Flask) ──────────────────────────────────────────
   - type: web
     name: pop-web
@@ -25,8 +18,6 @@ services:
         value: json
       - key: LOG_LEVEL
         value: INFO
-      - key: ASYNC_ENABLED
-        value: "true"
       - key: FLASK_SECRET_KEY
         generateValue: true        # Render auto-generates a secure random value
       - key: GEMINI_API_KEY
@@ -38,35 +29,4 @@ services:
       - key: DATABASE_URL
         fromDatabase:
           name: pop-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: pop-redis
-          property: connectionString
-
-  # ── Worker (RQ) ──────────────────────────────────────────
-  - type: worker
-    name: pop-worker
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    # Override the CMD so the worker container runs rq worker, not gunicorn
-    dockerCommand: rq worker pop
-    envVars:
-      - key: APP_ENV
-        value: production
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: TMDB_API_KEY
-        sync: false
-      - key: GOOGLE_BOOKS_API_KEY
-        sync: false
-      - key: DATABASE_URL
-        fromDatabase:
-          name: pop-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: pop-redis
           property: connectionString

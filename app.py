@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 import database
 from config import DevelopmentConfig, StagingConfig, ProductionConfig
 from utils import normalize_value, validate_preferences
-from job_queue import get_queue
 from jobs import process_decision_job
 from reviews import get_reviews
 from recommendations import get_recommendations
@@ -54,8 +53,6 @@ if app.secret_key == "dev-secret-change-me":
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     print("Warning: GEMINI_API_KEY not found in environment variables")
-
-JOB_QUEUE = get_queue(app.config["REDIS_URL"]) if app.config["ASYNC_ENABLED"] else None
 
 def build_preference_object(form, include_updated_at=True):
     """Builds a cleaned and normalized preference object from form data."""
@@ -176,6 +173,9 @@ def _build_job_payload(item_name, item_type, preferences, user_id, profile_id):
         "cache_ttl": app.config["CACHE_TTL_SECONDS"],
     }
 
+
+
+
 @app.route("/", methods=["GET"])
 def home():
     if not session.get("user_id"):
@@ -201,18 +201,6 @@ def readiness_check():
 @app.route("/metrics", methods=["GET"])
 def metrics():
     return jsonify(_metrics), 200
-
-@app.route("/jobs/<job_id>", methods=["GET"])
-@auth_required
-def job_status(job_id):
-    if not JOB_QUEUE:
-        return api_error("Async queue not available", status=400)
-    job = JOB_QUEUE.fetch_job(job_id)
-    if not job:
-        return api_error("Job not found", status=404, error_type="not_found")
-    status = job.get_status()
-    result = job.result if status == "finished" else None
-    return api_success({"status": status, "result": result})
 
 @app.route("/login", methods=["GET"])
 def login_page():
@@ -274,15 +262,6 @@ def handle_decision():
     
         profile_id = raw_prefs.get("id")
         payload = _build_job_payload(item_name, item_type, raw_prefs, user_id, profile_id)
-
-        if app.config["ASYNC_ENABLED"] and JOB_QUEUE:
-            job = JOB_QUEUE.enqueue(
-                process_decision_job,
-                payload,
-                job_timeout=app.config["AI_TIMEOUT_SECONDS"] + 5,
-                result_ttl=3600,
-            )
-            return api_success({"job_id": job.id, "status_url": f"/jobs/{job.id}"}, status=202)
 
         result = process_decision_job(payload)
         if result.get("status") == "completed":
