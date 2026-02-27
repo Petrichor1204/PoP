@@ -1,4 +1,4 @@
-.PHONY: test lint worker worker-simple docker-build docker-run
+.PHONY: test lint docker-build docker-run
 
 # ── Dev ───────────────────────────────────────────────────
 test:
@@ -6,13 +6,6 @@ test:
 
 lint:
 	flake8 .
-
-# ── Workers ───────────────────────────────────────────────
-worker:
-	rq worker pop
-
-worker-simple:
-	rq worker pop --worker-class rq.worker.SimpleWorker
 
 # ── Docker (local) ────────────────────────────────────────
 docker-build:
