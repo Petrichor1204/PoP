@@ -3,6 +3,7 @@ databases:
     databaseName: pop
     user: pop
     plan: free
+    ipAllowList: []   # empty = only allow connections from Render services internally
 
 services:
   # ── Redis ────────────────────────────────────────────────
