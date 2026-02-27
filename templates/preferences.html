@@ -1,114 +1,127 @@
 {% extends "base.html" %}
-
-{% block title %}Settings - Pick or Pass{% endblock %}
+{% block title %}Preferences – Pick or Pass{% endblock %}
 
 {% block content %}
-      <!-- User Preferences Section -->
-    <section>
-        <h2>Your Preferences</h2>
-        {% if save_error %}
-        <div style="color: red; margin-bottom: 20px;">{{ save_error }}</div>
-        {% endif %}
-        <div id="statusMessage" class="status-message" style="display: none;"></div>
-        <form id="preferencesForm" method="POST">
-            <label>Genres you like</label>
-            <input type="text" name="likes">
 
-            <label>Genres you dislike</label>
-            <input type="text" name="dislikes">
+<div class="auth-wrapper" style="max-width:560px;">
+    <div class="page-card">
 
-            <label>Preferred pace</label>
-            <select name="pace">
-                <option value="slow">Slow</option>
-                <option value="medium">Medium</option>
-                <option value="fast">Fast</option>
+        <h1>Your Preferences</h1>
+        <p class="subtitle">These shape every recommendation and evaluation.</p>
+
+        <div id="statusMessage" class="status-message" style="display:none;"></div>
+
+        <form id="preferencesForm">
+
+            <label for="likes">Genres &amp; themes you enjoy</label>
+            <input type="text" id="likes" name="likes"
+                   placeholder="e.g. sci-fi, thriller, slow burn, romance">
+
+            <label for="dislikes">Things you want to avoid</label>
+            <input type="text" id="dislikes" name="dislikes"
+                   placeholder="e.g. gore, jump scares, sad endings">
+
+            <div class="prefs-row">
+                <div class="prefs-col">
+                    <label for="pace">Preferred pace</label>
+                    <select id="pace" name="pace">
+                        <option value="slow">🐢 Slow</option>
+                        <option value="medium" selected>⚡ Medium</option>
+                        <option value="fast">🚀 Fast</option>
+                    </select>
+                </div>
+                <div class="prefs-col">
+                    <label for="emotional_tolerance">Emotional intensity</label>
+                    <select id="emotional_tolerance" name="emotional_tolerance">
+                        <option value="light">😌 Light</option>
+                        <option value="moderate" selected>😐 Moderate</option>
+                        <option value="heavy">😭 Heavy</option>
+                    </select>
+                </div>
+            </div>
+
+            <label for="goal">Why do you watch / read?</label>
+            <select id="goal" name="goal">
+                <option value="relax">😴 Relax &amp; unwind</option>
+                <option value="think">🧠 Think &amp; reflect</option>
+                <option value="escape">🌍 Escape into another world</option>
             </select>
 
-            <label>Emotional tolerance</label>
-            <select name="emotional_tolerance">
-                <option value="light">Light</option>
-                <option value="moderate">Moderate</option>
-                <option value="heavy">Heavy</option>
-            </select>
-
-            <label>Why do you consume media?</label>
-            <select name="goal">
-                <option value="relax">Relax</option>
-                <option value="think">Think</option>
-                <option value="escape">Escape</option>
-            </select>
-
-            <button type="submit">Save Preferences</button>
+            <div class="form-actions" style="margin-top:4px;">
+                <button type="submit" class="btn btn-green">💾 Save Preferences</button>
+                <a class="btn btn-outline" href="/">← Back to Home</a>
+            </div>
         </form>
-        <p style="margin-top: 12px;">
-            <a href="/">Go to Evaluate a Title</a>
-        </p>
-    </section>
-    
-    <script>
-        async function loadPreferences() {
-            const status = document.getElementById('statusMessage');
-            try {
-                const response = await fetch('/preferences');
-                const data = await response.json();
-                if (!response.ok) {
-                    status.className = "status-message status-error";
-                    status.innerText = (data.error && data.error.message) || 'No saved preferences yet.';
-                    status.style.display = "block";
-                    return;
-                }
-                const prefs = data.data;
-                const form = document.getElementById('preferencesForm');
-                form.querySelector('[name="likes"]').value = (prefs.likes || []).join(', ');
-                form.querySelector('[name="dislikes"]').value = (prefs.dislikes || []).join(', ');
-                form.querySelector('[name="pace"]').value = prefs.pace || 'medium';
-                form.querySelector('[name="emotional_tolerance"]').value = prefs.emotional_tolerance || 'moderate';
-                form.querySelector('[name="goal"]').value = prefs.goal || 'relax';
-                status.style.display = "none";
-            } catch (error) {
-                status.className = "status-message status-error";
-                status.innerText = 'Error loading preferences: ' + error.message;
-                status.style.display = "block";
+
+    </div>
+</div>
+
+<style>
+    .prefs-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+    }
+    .prefs-col label { margin-bottom: 5px; }
+    .prefs-col select { margin-bottom: 0; }
+    @media (max-width: 480px) {
+        .prefs-row { grid-template-columns: 1fr; }
+    }
+</style>
+
+<script>
+    async function loadPreferences() {
+        try {
+            const resp = await fetch('/preferences');
+            const json = await resp.json();
+            if (!resp.ok) return;
+            const p = json.data;
+            const f = document.getElementById('preferencesForm');
+            f.querySelector('[name="likes"]').value               = (p.likes    || []).join(', ');
+            f.querySelector('[name="dislikes"]').value            = (p.dislikes || []).join(', ');
+            f.querySelector('[name="pace"]').value                = p.pace                || 'medium';
+            f.querySelector('[name="emotional_tolerance"]').value = p.emotional_tolerance || 'moderate';
+            f.querySelector('[name="goal"]').value                = p.goal               || 'relax';
+        } catch(_) {}
+    }
+
+    document.getElementById('preferencesForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const statusEl = document.getElementById('statusMessage');
+        statusEl.style.display = 'none';
+
+        const f = document.getElementById('preferencesForm');
+        const payload = {
+            likes:                f.querySelector('[name="likes"]').value,
+            dislikes:             f.querySelector('[name="dislikes"]').value,
+            pace:                 f.querySelector('[name="pace"]').value,
+            emotional_tolerance:  f.querySelector('[name="emotional_tolerance"]').value,
+            goal:                 f.querySelector('[name="goal"]').value,
+        };
+
+        try {
+            const resp = await fetch('/preferences', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify(payload),
+            });
+            const json = await resp.json();
+            if (!resp.ok) {
+                statusEl.className   = 'status-message status-error';
+                statusEl.textContent = (json.error && json.error.message) || 'Error saving preferences.';
+            } else {
+                statusEl.className   = 'status-message status-success';
+                statusEl.textContent = '✅ Preferences saved!';
             }
+            statusEl.style.display = 'block';
+        } catch(err) {
+            statusEl.className   = 'status-message status-error';
+            statusEl.textContent = 'Network error: ' + err.message;
+            statusEl.style.display = 'block';
         }
+    });
 
-        document.getElementById('preferencesForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+    loadPreferences();
+</script>
 
-            const status = document.getElementById('statusMessage');
-            status.style.display = "none";
-
-            const preferencesForm = document.getElementById('preferencesForm');
-            const preferences = {
-                likes: preferencesForm.querySelector('[name="likes"]').value,
-                dislikes: preferencesForm.querySelector('[name="dislikes"]').value,
-                pace: preferencesForm.querySelector('[name="pace"]').value,
-                emotional_tolerance: preferencesForm.querySelector('[name="emotional_tolerance"]').value,
-                goal: preferencesForm.querySelector('[name="goal"]').value
-            };
-            try {
-                const response = await fetch('/preferences', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json'},
-                    body: JSON.stringify(preferences)
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                    status.className = "status-message status-error";
-                    status.innerText = (data.error && data.error.message) || 'Error saving preferences.';
-                    status.style.display = "block";
-                    return;
-                }
-                status.className = "status-message status-success";
-                status.innerText = 'Preferences saved successfully.';
-                status.style.display = "block";
-            } catch (error) {
-                status.className = "status-message status-error";
-                status.innerText = 'Error saving preferences: ' + error.message;
-                status.style.display = "block";
-            }
-        });
-
-        loadPreferences();
-    </script>
 {% endblock %}

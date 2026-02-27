@@ -23,7 +23,15 @@ def client(tmp_path, monkeypatch):
         yield client
 
 
+def _register_and_login(client):
+    res = client.post("/users", json={"username": "tester", "password": "secret"})
+    assert res.status_code == 201
+    res = client.post("/login", json={"username": "tester", "password": "secret"})
+    assert res.status_code == 200
+
+
 def _set_preferences(client):
+    _register_and_login(client)
     payload = {
         "likes": "action, adventure",
         "dislikes": "slow",
@@ -35,6 +43,7 @@ def _set_preferences(client):
 
 
 def test_get_preferences_empty(client):
+    _register_and_login(client)
     res = client.get("/preferences")
     assert res.status_code == 404
     body = res.get_json()
@@ -60,6 +69,7 @@ def test_set_and_get_preferences(client):
 
 
 def test_preferences_validation(client):
+    _register_and_login(client)
     res = client.post("/preferences", json={"likes": "", "dislikes": "", "pace": "", "emotional_tolerance": "", "goal": ""})
     assert res.status_code == 400
     body = res.get_json()
@@ -68,6 +78,7 @@ def test_preferences_validation(client):
 
 
 def test_decide_requires_preferences(client):
+    _register_and_login(client)
     res = client.post("/decide", json={"item_name": "Dune", "item_type": "movie"})
     assert res.status_code == 400
     body = res.get_json()
@@ -131,6 +142,7 @@ def test_decide_ai_repair(monkeypatch, client):
 
 
 def test_history_pagination_empty(client):
+    _register_and_login(client)
     res = client.get("/history?limit=10&offset=0")
     assert res.status_code == 200
     body = res.get_json()
@@ -142,9 +154,9 @@ def test_history_pagination_empty(client):
     assert body["data"]["pagination"]["offset"] == 0
 
 
-def test_invalid_user_id_header(client):
-    res = client.get("/preferences", headers={"X-User-Id": "not-an-int"})
-    assert res.status_code == 400
+def test_requires_auth(client):
+    res = client.get("/preferences")
+    assert res.status_code == 401
     body = res.get_json()
     assert body["success"] is False
-    assert body["error"]["message"] == "Invalid user_id"
+    assert body["error"]["message"] == "Authentication required"

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Pick or Pass{% endblock %}
+
+{% block content %}
+    <section>
+        <h2>Login</h2>
+        <div id="statusMessage" class="status-message" style="display: none;"></div>
+        <form id="loginForm" class="auth-form">
+            <label>Username</label>
+            <input type="text" name="username" required>
+
+            <label>Password</label>
+            <input type="password" name="password" required>
+
+            <div class="form-actions">
+                <button type="submit">Login</button>
+                <a class="btn-link" href="/register">Create Account</a>
+            </div>
+        </form>
+    </section>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const status = document.getElementById('statusMessage');
+            status.style.display = "none";
+
+            const form = document.getElementById('loginForm');
+            const payload = {
+                username: form.querySelector('[name="username"]').value,
+                password: form.querySelector('[name="password"]').value
+            };
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    status.className = "status-message status-error";
+                    status.innerText = (data.error && data.error.message) || 'Login failed.';
+                    status.style.display = "block";
+                    return;
+                }
+                window.location.href = '/';
+            } catch (error) {
+                status.className = "status-message status-error";
+                status.innerText = 'Login error: ' + error.message;
+                status.style.display = "block";
+            }
+        });
+    </script>
+{% endblock %}

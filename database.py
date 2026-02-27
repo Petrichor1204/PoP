@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import (
     create_engine,
     Column,
@@ -13,6 +13,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from werkzeug.security import generate_password_hash, check_password_hash
 from utils import validate_preferences, validate_decision
 
 DB_NAME = "my_database.db"
@@ -28,7 +29,9 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String(100), unique=True, nullable=False)
     email = Column(String(200), unique=True, nullable=True)
+    password_hash = Column(Text, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_login_at = Column(DateTime, nullable=True)
 
     profiles = relationship("PreferenceProfile", back_populates="user", cascade="all, delete-orphan")
     decisions = relationship("Decision", back_populates="user", cascade="all, delete-orphan")
@@ -68,6 +71,15 @@ class Decision(Base):
     profile = relationship("PreferenceProfile", back_populates="decisions")
 
 
+class AiCache(Base):
+    __tablename__ = "ai_cache"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cache_key = Column(String(255), unique=True, nullable=False)
+    response_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+
 def get_engine():
     return create_engine(get_database_url(), connect_args={"check_same_thread": False})
 
@@ -81,31 +93,47 @@ def get_session():
 def init_db():
     engine = get_engine()
     Base.metadata.create_all(engine)
-    ensure_default_user()
 
 
-def ensure_default_user():
+def create_user(username, email=None, password_hash=None):
     session = get_session()
     try:
-        existing = session.query(User).filter(User.id == 1).first()
-        if not existing:
-            user = User(id=1, username="default")
-            session.add(user)
-            session.commit()
-    finally:
-        session.close()
-
-
-def create_user(username, email=None):
-    session = get_session()
-    try:
-        user = User(username=username, email=email)
+        user = User(username=username, email=email, password_hash=password_hash)
         session.add(user)
         session.commit()
         session.refresh(user)
         return user
     finally:
         session.close()
+
+
+def get_user_by_username(username):
+    session = get_session()
+    try:
+        return session.query(User).filter(User.username == username).first()
+    finally:
+        session.close()
+
+
+def set_last_login(user_id):
+    session = get_session()
+    try:
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            return False
+        user.last_login_at = datetime.now(timezone.utc)
+        session.commit()
+        return True
+    finally:
+        session.close()
+
+
+def hash_password(password):
+    return generate_password_hash(password, method="pbkdf2:sha256")
+
+
+def verify_password(password_hash, password):
+    return check_password_hash(password_hash, password)
 
 
 def get_user(user_id):
@@ -269,6 +297,38 @@ def get_recent_decisions(user_id, limit=5, offset=0, item_type=None, verdict=Non
             decisions.append(_decision_to_dict(row))
 
         return decisions, total
+    finally:
+        session.close()
+
+
+def get_ai_cache(cache_key, now):
+    session = get_session()
+    try:
+        row = session.query(AiCache).filter(AiCache.cache_key == cache_key).first()
+        if not row:
+            return None
+        if row.expires_at <= now:
+            session.delete(row)
+            session.commit()
+            return None
+        return json.loads(row.response_json)
+    finally:
+        session.close()
+
+
+def set_ai_cache(cache_key, response_dict, now, ttl_seconds):
+    session = get_session()
+    try:
+        expires_at = now + timedelta(seconds=ttl_seconds)
+        row = session.query(AiCache).filter(AiCache.cache_key == cache_key).first()
+        if not row:
+            row = AiCache(cache_key=cache_key)
+            session.add(row)
+        row.response_json = json.dumps(response_dict, ensure_ascii=False)
+        row.created_at = now
+        row.expires_at = expires_at
+        session.commit()
+        return True
     finally:
         session.close()
 

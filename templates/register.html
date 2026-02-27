@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}Register - Pick or Pass{% endblock %}
+
+{% block content %}
+    <section>
+        <h2>Create Account</h2>
+        <div id="statusMessage" class="status-message" style="display: none;"></div>
+        <p style="margin-bottom: 12px;">Already have an account? <a href="/login">Log in here</a></p>
+        <form id="registerForm" class="auth-form">
+            <label>Username</label>
+            <input type="text" name="username" required>
+
+            <label>Password</label>
+            <input type="password" name="password" required>
+
+            <div class="form-actions">
+                <button type="submit">Register</button>
+                <a class="btn-link" href="/login">Go to Login</a>
+            </div>
+        </form>
+    </section>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const status = document.getElementById('statusMessage');
+            status.style.display = "none";
+
+            const form = document.getElementById('registerForm');
+            const payload = {
+                username: form.querySelector('[name="username"]').value,
+                password: form.querySelector('[name="password"]').value
+            };
+
+            try {
+                const response = await fetch('/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    status.className = "status-message status-error";
+                    status.innerText = (data.error && data.error.message) || 'Registration failed.';
+                    status.style.display = "block";
+                    return;
+                }
+                window.location.href = '/login';
+            } catch (error) {
+                status.className = "status-message status-error";
+                status.innerText = 'Registration error: ' + error.message;
+                status.style.display = "block";
+            }
+        });
+    </script>
+{% endblock %}

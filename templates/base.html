@@ -5,109 +5,286 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Pick or Pass{% endblock %}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
 
         :root {
-            --blue-900: #0b1b33;
-            --blue-800: #112445;
-            --blue-100: #e8edf6;
-            --white: #ffffff;
-            --text: #0b1b33;
-            --muted: #5b6b86;
-            --warn-bg: #fff4e5;
-            --warn-text: #8a5a00;
-            --warn-border: #f0d6a8;
-            --success-bg: #e9f7ef;
-            --success-text: #1e6b3a;
-            --success-border: #bfe6cf;
+            --bg:          #EEF2FF;
+            --bg-deep:     #1e3a6e;
+            --bg-card:     #ffffff;
+            --on-bg:       #1e3a6e;
+            --accent:      #3B82F6;
+            --accent-dark: #2563EB;
+            --green:       #22C55E;
+            --green-dark:  #16A34A;
+            --red:         #EF4444;
+            --red-dark:    #DC2626;
+            --yellow:      #F59E0B;
+            --yellow-dark: #D97706;
+            --white:       #ffffff;
+            --text:        #1e293b;
+            --muted:       #64748b;
+            --border:      #e2e8f0;
+            --shadow:      rgba(30, 58, 110, 0.10);
         }
 
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            margin: 0;
-            font-family: "Space Grotesk", "Segoe UI", sans-serif;
-            background: var(--blue-100);
+            font-family: "Nunito", "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Nav ── */
+        nav {
+            background: var(--bg-deep);
+            padding: 0 2rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            box-shadow: 0 2px 12px rgba(30,58,110,0.18);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        nav .nav-brand {
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            margin-right: auto;
+            text-decoration: none;
+        }
+        nav .nav-brand span { color: #93C5FD; }
+        nav a {
+            color: rgba(255,255,255,0.75);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 0.875rem;
+            padding: 6px 14px;
+            border-radius: 20px;
+            transition: background 0.15s, color 0.15s;
+        }
+        nav a:hover {
+            background: rgba(255,255,255,0.12);
+            color: #ffffff;
+        }
+        nav a.nav-logout {
+            background: rgba(239,68,68,0.15);
+            color: #fca5a5;
+        }
+        nav a.nav-logout:hover {
+            background: rgba(239,68,68,0.28);
+            color: #fecaca;
+        }
+
+        /* ── Page wrapper ── */
+        .content {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 28px 24px 40px;
+        }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 20px 22px;
+            box-shadow: 0 2px 12px var(--shadow);
             color: var(--text);
         }
-        nav {
-            background: var(--blue-900);
-            color: var(--white);
-            padding: 1rem 1.5rem;
-            margin-bottom: 2rem;
+        .card h2 {
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+            margin-bottom: 10px;
         }
-        nav a {
-            color: var(--white);
-            margin-right: 16px;
-            text-decoration: none;
-            font-weight: 600;
-        }
-        nav a:hover { text-decoration: underline; }
 
-        .content {
-            max-width: 820px;
-            margin: auto;
-            padding: 0 20px 40px;
+        /* ── Auth / page-level card wrappers ── */
+        .auth-wrapper {
+            max-width: 440px;
+            margin: 48px auto 0;
         }
-        section {
-            background: var(--white);
-            border: 1px solid #dbe3f0;
-            border-radius: 10px;
-            padding: 24px;
+        .page-card {
+            background: var(--bg-card);
+            border-radius: 24px;
+            padding: 36px 32px;
+            box-shadow: 0 2px 16px var(--shadow);
+            color: var(--text);
+        }
+        .page-card h1 {
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .page-card h2 {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 14px;
+        }
+        .page-card .subtitle {
+            color: var(--muted);
             margin-bottom: 24px;
+            font-size: 0.9rem;
         }
-        h1, h2, h3 {
-            margin: 0 0 12px;
-            color: var(--blue-900);
-            letter-spacing: 0.2px;
+
+        /* ── Legacy section support (other pages) ── */
+        section.page-section {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 28px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 12px var(--shadow);
+            color: var(--text);
         }
-        h1 { font-size: 28px; }
-        h2 { font-size: 20px; }
-        h3 { font-size: 16px; text-transform: uppercase; color: var(--muted); }
-        p { margin: 0 0 10px; color: var(--text); }
-        label { font-weight: 600; color: var(--blue-900); }
-        input[type="text"], select {
+        section.page-section h1,
+        section.page-section h2 { color: var(--text); margin-bottom: 14px; }
+        section.page-section h1 { font-size: 1.5rem; font-weight: 900; }
+        section.page-section h2 { font-size: 1.1rem; font-weight: 800; }
+        section.page-section p  { color: var(--text); margin-bottom: 8px; font-size: 0.925rem; }
+
+        /* ── Form controls ── */
+        label {
+            display: block;
+            font-weight: 700;
+            font-size: 0.875rem;
+            color: var(--text);
+            margin-bottom: 5px;
+        }
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        select,
+        textarea {
             width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #cfd8e6;
-            border-radius: 8px;
-            margin-top: 6px;
-            margin-bottom: 12px;
+            padding: 11px 14px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            color: var(--text);
+            background: #f8fafc;
+            margin-bottom: 16px;
+            transition: border-color 0.15s;
+            outline: none;
         }
-        button {
-            background: var(--blue-800);
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--accent);
+            background: var(--white);
+        }
+
+        /* ── Buttons ── */
+        button, .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            background: var(--accent);
             color: var(--white);
             border: none;
-            padding: 10px 16px;
-            border-radius: 8px;
-            font-weight: 600;
+            border-bottom: 3px solid var(--accent-dark);
+            border-radius: 12px;
+            padding: 11px 22px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 800;
             cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.1s, border-bottom-width 0.1s, filter 0.1s;
+            letter-spacing: 0.2px;
         }
-        button:disabled { opacity: 0.7; cursor: not-allowed; }
+        button:hover, .btn:hover { filter: brightness(1.07); }
+        button:active, .btn:active {
+            transform: translateY(2px);
+            border-bottom-width: 1px;
+        }
+        button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
+        .btn-green {
+            background: var(--green);
+            border-bottom-color: var(--green-dark);
+        }
+        .btn-outline {
+            background: transparent;
+            color: var(--accent);
+            border: 2px solid var(--accent);
+            border-bottom: 3px solid var(--accent-dark);
+        }
+        .btn-outline:hover { background: #EEF2FF; }
+
+        /* ── Status messages ── */
         .status-message {
-            padding: 10px 12px;
-            border-radius: 6px;
-            margin: 12px 0;
-            font-weight: 600;
-            border: 1px solid transparent;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.875rem;
+            margin: 8px 0;
         }
         .status-error {
-            background: var(--warn-bg);
-            color: var(--warn-text);
-            border-color: var(--warn-border);
+            background: #FEF2F2;
+            color: #B91C1C;
+            border: 1.5px solid #FECACA;
         }
         .status-success {
-            background: var(--success-bg);
-            color: var(--success-text);
-            border-color: var(--success-border);
+            background: #F0FDF4;
+            color: #15803D;
+            border: 1.5px solid #BBF7D0;
         }
+
+        /* ── Form actions row ── */
+        .form-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        /* ── Welcome text (on page bg) ── */
+        .welcome-text {
+            font-size: 1.4rem;
+            font-weight: 900;
+            color: var(--on-bg);
+            margin-bottom: 14px;
+        }
+
+        /* ── Animations ── */
+        @keyframes popIn {
+            0%   { transform: scale(0.78); opacity: 0; }
+            65%  { transform: scale(1.05); }
+            100% { transform: scale(1);    opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(18px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        .pop-in   { animation: popIn   0.38s cubic-bezier(.34,1.56,.64,1) both; }
+        .slide-up { animation: slideUp 0.28s ease-out both; }
+        .fade-in  { animation: fadeIn  0.25s ease-out both; }
     </style>
 </head>
 <body>
     <nav>
+        <a href="/" class="nav-brand">Pick<span>or</span>Pass</a>
         <a href="/">Home</a>
         <a href="/settings">Preferences</a>
         <a href="/past-decisions">History</a>
+        {% if session.get("user_id") %}
+        <a href="/logout" class="nav-logout">Logout</a>
+        {% else %}
+        <a href="/login">Login</a>
+        <a href="/register">Register</a>
+        {% endif %}
     </nav>
 
     <div class="content">

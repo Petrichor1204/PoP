@@ -1,61 +1,441 @@
 {% extends "base.html" %}
-
-{% block title %}History - Pick or Pass{% endblock %}
+{% block title %}History – Pick or Pass{% endblock %}
 
 {% block content %}
-    <!-- History Section -->
-    <section>
-        <h2>Past Decisions</h2>
-        <button id="loadHistoryBtn">Load History</button>
-        <div id="statusMessage" class="status-message" style="display: none;"></div>
-        <div id="historyContainer"></div>
-    </section>
-    <script>
-        // Handle history loading
-        document.getElementById('loadHistoryBtn').addEventListener('click', async () => {
-            try {
-                const response = await fetch('/history?limit=10');
-                const responseBody = await response.json();
 
-                const historyContainer = document.getElementById('historyContainer');
-                const status = document.getElementById('statusMessage');
-                historyContainer.innerHTML = '';
-                status.style.display = "none";
+<!-- ── Page header ── -->
+<div class="history-header">
+    <div>
+        <h1 class="page-title">Past Decisions</h1>
+        <p class="page-subtitle">Every title you've evaluated, in one place.</p>
+    </div>
+    <button class="btn btn-outline" id="refreshBtn" title="Refresh">↺ Refresh</button>
+</div>
 
-                if (!response.ok) {
-                    status.className = "status-message status-error";
-                    status.innerText = (responseBody.error && responseBody.error.message) || 'Error loading history.';
-                    status.style.display = "block";
-                    return;
-                }
+<!-- ── Filters ── -->
+<div class="filter-bar">
+    <div class="filter-group">
+        <span class="filter-label">Type</span>
+        <div class="pill-group" id="typeFilter">
+            <button class="pill active" data-value="">All</button>
+            <button class="pill" data-value="movie">🎬 Movies</button>
+            <button class="pill" data-value="book">📚 Books</button>
+        </div>
+    </div>
+    <div class="filter-group">
+        <span class="filter-label">Verdict</span>
+        <div class="pill-group" id="verdictFilter">
+            <button class="pill active" data-value="">All</button>
+            <button class="pill pill-yes"   data-value="Yes">✅ Pick</button>
+            <button class="pill pill-no"    data-value="No">❌ Pass</button>
+            <button class="pill pill-maybe" data-value="Maybe">🤔 Maybe</button>
+        </div>
+    </div>
+</div>
 
-                const decisions = (responseBody.data && responseBody.data.items) ? responseBody.data.items : [];
+<!-- ── Status ── -->
+<div id="statusMessage" class="status-message" style="display:none;"></div>
 
-                if (decisions.length === 0) {
-                    historyContainer.innerHTML = '<p>No past decisions yet.</p>';
-                    return;
-                }
+<!-- ── History list ── -->
+<div id="historyGrid" class="history-grid"></div>
 
-                decisions.forEach(decision => {
-                    const decisionEl = document.createElement('div');
-                    const mismatches = (decision.potential_mismatches || []).map(m => `<li>${m}</li>`).join('');
-                    decisionEl.innerHTML = `
-                        <h4>${decision.item_title} (${decision.item_type})</h4>
-                        <p><strong>Verdict:</strong> ${decision.verdict}</p>
-                        <p><strong>Confidence:</strong> ${(decision.confidence * 100).toFixed(1)}%</p>
-                        <p><strong>Reasoning:</strong> ${decision.reasoning}</p>
-                        <p><strong>Potential Concerns:</strong> ${mismatches ? `<ul>${mismatches}</ul>` : 'None'}</p>
-                        <p><strong>Date:</strong> ${new Date(decision.created_at).toLocaleString()}</p>
-                        <hr>
-                    `;
-                    historyContainer.appendChild(decisionEl);
-                });
-            } catch (error) {
-                const status = document.getElementById('statusMessage');
-                status.className = "status-message status-error";
-                status.innerText = 'Error loading history: ' + error.message;
-                status.style.display = "block";
-            }
+<!-- ── Load more ── -->
+<div id="loadMoreWrap" style="display:none; text-align:center; margin-top:20px;">
+    <button class="btn btn-outline" id="loadMoreBtn">Load more</button>
+</div>
+
+<!-- ── Empty state ── -->
+<div id="emptyState" class="empty-state" style="display:none;">
+    <div class="empty-icon">🎬</div>
+    <p class="empty-title">Nothing here yet</p>
+    <p class="empty-sub">Go evaluate a title and it'll show up here.</p>
+    <a href="/" class="btn">Evaluate something</a>
+</div>
+
+
+<style>
+    /* ── Header ── */
+    .history-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        margin-bottom: 20px;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .page-title {
+        font-size: 1.75rem;
+        font-weight: 900;
+        color: var(--on-bg);
+        margin-bottom: 2px;
+    }
+    .page-subtitle {
+        font-size: 0.875rem;
+        color: var(--muted);
+        font-weight: 600;
+    }
+
+    /* ── Filter bar ── */
+    .filter-bar {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+        align-items: center;
+        background: var(--white);
+        border-radius: 16px;
+        padding: 14px 18px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 10px var(--shadow);
+    }
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .filter-label {
+        font-size: 0.72rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--muted);
+        white-space: nowrap;
+    }
+    .pill-group {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .pill {
+        padding: 5px 14px;
+        border-radius: 99px;
+        border: 2px solid var(--border);
+        background: var(--bg);
+        color: var(--muted);
+        font-family: inherit;
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.15s;
+        border-bottom: 2px solid var(--border);
+    }
+    .pill:hover   { border-color: var(--accent); color: var(--accent); background: #EEF2FF; }
+    .pill.active  { background: var(--accent); color: #fff; border-color: var(--accent-dark); border-bottom-color: var(--accent-dark); }
+    .pill-yes.active  { background: #22C55E; border-color: #16A34A; border-bottom-color: #16A34A; }
+    .pill-no.active   { background: #EF4444; border-color: #DC2626; border-bottom-color: #DC2626; }
+    .pill-maybe.active { background: #F59E0B; border-color: #D97706; border-bottom-color: #D97706; }
+
+    /* ── Grid ── */
+    .history-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        gap: 14px;
+    }
+
+    /* ── History card ── */
+    .h-card {
+        background: var(--white);
+        border-radius: 18px;
+        padding: 18px 20px;
+        box-shadow: 0 2px 10px var(--shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-left: 5px solid var(--border);
+        animation: slideUp 0.25s ease-out both;
+    }
+    .h-card.v-yes   { border-left-color: #22C55E; }
+    .h-card.v-no    { border-left-color: #EF4444; }
+    .h-card.v-maybe { border-left-color: #F59E0B; }
+
+    /* Card top row */
+    .h-card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .h-card-title {
+        font-size: 1rem;
+        font-weight: 900;
+        color: var(--text);
+        line-height: 1.25;
+    }
+    .h-card-meta {
+        font-size: 0.72rem;
+        color: var(--muted);
+        font-weight: 600;
+        margin-top: 3px;
+    }
+    .verdict-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 12px;
+        border-radius: 99px;
+        font-size: 0.75rem;
+        font-weight: 800;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .badge-yes   { background: #DCFCE7; color: #15803D; }
+    .badge-no    { background: #FEE2E2; color: #B91C1C; }
+    .badge-maybe { background: #FEF3C7; color: #92400E; }
+
+    /* Confidence bar */
+    .h-conf-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .h-conf-bar-wrap {
+        flex: 1;
+        height: 5px;
+        background: var(--border);
+        border-radius: 99px;
+        overflow: hidden;
+    }
+    .h-conf-bar {
+        height: 100%;
+        border-radius: 99px;
+        transition: width 0.4s ease;
+    }
+    .v-yes  .h-conf-bar { background: #22C55E; }
+    .v-no   .h-conf-bar { background: #EF4444; }
+    .v-maybe .h-conf-bar { background: #F59E0B; }
+    .h-conf-label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--muted);
+        white-space: nowrap;
+    }
+
+    /* Reasoning */
+    .h-reasoning {
+        font-size: 0.84rem;
+        color: #374151;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* Concerns */
+    .h-concerns {
+        font-size: 0.75rem;
+        color: var(--muted);
+        line-height: 1.45;
+    }
+    .h-concerns ul {
+        margin: 3px 0 0 14px;
+        padding: 0;
+    }
+    .h-concerns li { margin-bottom: 2px; }
+
+    /* ── Empty state ── */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+    .empty-icon  { font-size: 3rem; margin-bottom: 12px; }
+    .empty-title { font-size: 1.1rem; font-weight: 800; color: var(--on-bg); margin-bottom: 6px; }
+    .empty-sub   { font-size: 0.875rem; color: var(--muted); margin-bottom: 20px; }
+
+    /* ── Skeleton loader ── */
+    .skeleton {
+        background: linear-gradient(90deg, #f0f4ff 25%, #e2e8f0 50%, #f0f4ff 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.3s infinite;
+        border-radius: 10px;
+        height: 14px;
+    }
+    .skeleton-card {
+        background: var(--white);
+        border-radius: 18px;
+        padding: 18px 20px;
+        box-shadow: 0 2px 10px var(--shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    @keyframes shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+</style>
+
+<script>
+    let currentOffset  = 0;
+    let currentType    = '';
+    let currentVerdict = '';
+    const PAGE_SIZE    = 12;
+
+    // ── Pill filter wiring ─────────────────────────────
+    function initPills(groupId, onChange) {
+        document.getElementById(groupId).addEventListener('click', e => {
+            const pill = e.target.closest('.pill');
+            if (!pill) return;
+            document.querySelectorAll(`#${groupId} .pill`).forEach(p => p.classList.remove('active'));
+            pill.classList.add('active');
+            onChange(pill.dataset.value);
         });
-    </script>
+    }
+
+    initPills('typeFilter', v => {
+        currentType = v;
+        resetAndLoad();
+    });
+    initPills('verdictFilter', v => {
+        currentVerdict = v;
+        resetAndLoad();
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', resetAndLoad);
+    document.getElementById('loadMoreBtn').addEventListener('click', loadMore);
+
+    // ── Render helpers ─────────────────────────────────
+    function badgeHTML(verdict) {
+        if (verdict === 'Yes')   return '<span class="verdict-badge badge-yes">✅ Pick</span>';
+        if (verdict === 'No')    return '<span class="verdict-badge badge-no">❌ Pass</span>';
+        return '<span class="verdict-badge badge-maybe">🤔 Maybe</span>';
+    }
+
+    function cardClass(verdict) {
+        if (verdict === 'Yes')   return 'h-card v-yes';
+        if (verdict === 'No')    return 'h-card v-no';
+        return 'h-card v-maybe';
+    }
+
+    function formatDate(iso) {
+        const d = new Date(iso);
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+             + ' · ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderCard(d, delay) {
+        const conf     = ((d.confidence || 0) * 100).toFixed(0);
+        const typeIcon = d.item_type === 'movie' ? '🎬' : '📚';
+        const mm       = (d.potential_mismatches || []).slice(0, 2);
+        const mmHTML   = mm.length
+            ? `<div class="h-concerns"><strong>Concerns</strong><ul>${mm.map(m => `<li>${m}</li>`).join('')}</ul></div>`
+            : '';
+
+        return `
+        <div class="${cardClass(d.verdict)}" style="animation-delay:${delay}s">
+            <div class="h-card-top">
+                <div>
+                    <div class="h-card-title">${d.item_title}</div>
+                    <div class="h-card-meta">${typeIcon} ${d.item_type.charAt(0).toUpperCase() + d.item_type.slice(1)} · ${formatDate(d.created_at)}</div>
+                </div>
+                ${badgeHTML(d.verdict)}
+            </div>
+            <div class="h-conf-row">
+                <div class="h-conf-bar-wrap">
+                    <div class="h-conf-bar" style="width:${conf}%"></div>
+                </div>
+                <span class="h-conf-label">${conf}% confident</span>
+            </div>
+            <p class="h-reasoning">${d.reasoning}</p>
+            ${mmHTML}
+        </div>`;
+    }
+
+    function renderSkeletons(n = 6) {
+        return Array.from({length: n}, () => `
+            <div class="skeleton-card">
+                <div style="display:flex;justify-content:space-between;gap:10px">
+                    <div class="skeleton" style="width:60%;height:16px"></div>
+                    <div class="skeleton" style="width:22%;height:20px;border-radius:99px"></div>
+                </div>
+                <div class="skeleton" style="width:40%;height:10px"></div>
+                <div class="skeleton" style="height:5px;border-radius:99px"></div>
+                <div class="skeleton" style="height:12px"></div>
+                <div class="skeleton" style="width:75%;height:12px"></div>
+            </div>`
+        ).join('');
+    }
+
+    // ── Data fetching ──────────────────────────────────
+    async function fetchHistory(offset) {
+        const params = new URLSearchParams({ limit: PAGE_SIZE, offset });
+        if (currentType)    params.set('type',    currentType);
+        if (currentVerdict) params.set('verdict', currentVerdict);
+        const resp = await fetch(`/history?${params}`);
+        const json = await resp.json();
+        if (!resp.ok) throw new Error((json.error && json.error.message) || 'Error loading history');
+        return json.data;
+    }
+
+    async function resetAndLoad() {
+        currentOffset = 0;
+        const grid = document.getElementById('historyGrid');
+        grid.innerHTML = renderSkeletons(6);
+        document.getElementById('loadMoreWrap').style.display  = 'none';
+        document.getElementById('emptyState').style.display    = 'none';
+        document.getElementById('statusMessage').style.display = 'none';
+
+        try {
+            const data  = await fetchHistory(0);
+            const items = data.items || [];
+            const total = (data.pagination && data.pagination.total) || 0;
+
+            grid.innerHTML = '';
+
+            if (!items.length) {
+                document.getElementById('emptyState').style.display = 'flex';
+                document.getElementById('emptyState').style.flexDirection = 'column';
+                document.getElementById('emptyState').style.alignItems = 'center';
+                return;
+            }
+
+            grid.innerHTML = items.map((d, i) => renderCard(d, i * 0.04)).join('');
+            currentOffset  = items.length;
+
+            if (currentOffset < total) {
+                document.getElementById('loadMoreWrap').style.display = 'block';
+            }
+        } catch(err) {
+            grid.innerHTML = '';
+            showStatus('error', err.message);
+        }
+    }
+
+    async function loadMore() {
+        const btn = document.getElementById('loadMoreBtn');
+        btn.disabled    = true;
+        btn.textContent = 'Loading…';
+
+        try {
+            const data  = await fetchHistory(currentOffset);
+            const items = data.items || [];
+            const total = (data.pagination && data.pagination.total) || 0;
+            const grid  = document.getElementById('historyGrid');
+            const delay = 0;
+
+            items.forEach((d, i) => {
+                grid.insertAdjacentHTML('beforeend', renderCard(d, i * 0.04));
+            });
+
+            currentOffset += items.length;
+            document.getElementById('loadMoreWrap').style.display =
+                currentOffset < total ? 'block' : 'none';
+        } catch(err) {
+            showStatus('error', err.message);
+        } finally {
+            btn.disabled    = false;
+            btn.textContent = 'Load more';
+        }
+    }
+
+    function showStatus(type, msg) {
+        const el = document.getElementById('statusMessage');
+        el.className     = 'status-message ' + (type === 'error' ? 'status-error' : 'status-success');
+        el.textContent   = msg;
+        el.style.display = 'block';
+    }
+
+    // Auto-load on page open
+    resetAndLoad();
+</script>
+
 {% endblock %}

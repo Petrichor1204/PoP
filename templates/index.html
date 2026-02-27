@@ -1,113 +1,663 @@
 {% extends "base.html" %}
-
-{% block title %}Home - Pick or Pass{% endblock %}
+{% block title %}Pick or Pass{% endblock %}
 
 {% block content %}
-    <h1>Pick or Pass</h1>
-    <!-- Title Evaluation Section -->
-    <section>
-        <h2>Evaluate a Title</h2>
-        <p>Need to set preferences first? <a href="/settings">Go to Preferences</a></p>
-    <form id="evaluationForm">
-        <label for="itemName">Title</label>
-        <input type="text" id="itemName" name="item_name" required>
+{% if welcome_message %}
+<p class="welcome-text">👋 {{ welcome_message }}!</p>
+{% endif %}
 
-        <label for="itemType">Type</label>
+<!-- ═══════════════════ SEARCH BAR ═══════════════════ -->
+<div class="search-row">
+    <form id="evaluationForm" class="search-form">
+        <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="itemName" name="item_name"
+                   placeholder="Movie or book title…" autocomplete="off" required>
+        </div>
         <select id="itemType" name="item_type">
-            <option value="movie">Movie</option>
-            <option value="book">Book</option>
+            <option value="movie">🎬 Movie</option>
+            <option value="book">📚 Book</option>
         </select>
-
-        <button type="submit">Get Recommendation</button>
+        <button type="submit" id="submitBtn">Evaluate</button>
+        <a class="btn btn-outline" href="/settings">⚙️ Preferences</a>
     </form>
+    <div id="statusMessage" class="status-message" style="display:none;"></div>
+</div>
 
-    </section>
+<!-- ═══════════════════ RESULTS GRID ═══════════════════ -->
+<div id="resultsGrid" class="results-grid" style="display:none;">
 
-    <div id="statusMessage" class="status-message" style="display: none;"></div>
+    <!-- Verdict -->
+    <div class="card verdict-card" id="verdictCard">
+        <h2>AI Verdict</h2>
+        <div id="verdictEmoji"  class="verdict-emoji"></div>
+        <div id="verdictWord"   class="verdict-word"></div>
+        <div id="verdictConf"   class="verdict-conf"></div>
+        <p   id="verdictReason" class="verdict-reason"></p>
+        <div id="verdictMismatches" class="mismatch-list"></div>
+    </div>
 
-    <!-- Decision Result Section -->
-    <section id="decisionResult" style="display: none;">
-        <h2>Decision Result</h2>
-        <div id="verdict"></div>
-        <div id="confidence"></div>
-        <div id="reasoning"></div>
-        <div id="mismatches"></div>
-    </section>
-    <script>
-        async function handleEvaluation(event) {
-            event.preventDefault();
+    <!-- Ratings -->
+    <div class="card ratings-card" id="ratingsCard">
+        <h2>Audience Rating</h2>
+        <div id="ratingsContent">
+            <p class="loading-text">⏳ Loading ratings…</p>
+        </div>
+    </div>
 
-            const itemName = document.getElementById('itemName').value;
-            const itemType = document.getElementById('itemType').value;
-            const submitBtn = event.target.querySelector('button');
-            const status = document.getElementById('statusMessage');
+    <!-- Where to Watch / Get -->
+    <div class="card watch-card" id="watchCard">
+        <h2 id="watchHeading">Where to Watch</h2>
+        <div id="watchContent">
+            <p class="loading-text">⏳ Loading…</p>
+        </div>
+    </div>
 
-            // Loading State: Professional touch for your GitHub
-            submitBtn.disabled = true;
-            submitBtn.innerText = "Analyzing...";
-            status.style.display = "none";
-            status.className = "status-message";
+</div>
 
-            try {
-                const response = await fetch('/decide', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        item_name: itemName,
-                        item_type: itemType
-                    })
-                });
+<!-- ═══════════════════ RECOMMENDATIONS ═══════════════════ -->
+<div id="recsSection" style="display:none;">
+    <div class="recs-header">
+        <span class="recs-title">✨ You might also like</span>
+    </div>
+    <div id="recsGrid" class="recs-grid"></div>
+</div>
 
-                const data = await response.json();
 
-                if (response.ok && data.data) {
-                    displayDecision(data.data);
-                    status.style.display = "none";
-                } else {
-                    status.className = "status-message status-error";
-                    status.innerText = (data.error && data.error.message) || 'Unknown error';
-                    status.style.display = "block";
-                }
+<!-- ═══════════════════ STYLES ═══════════════════ -->
+<style>
+    /* ── Search row ── */
+    .search-row {
+        margin-bottom: 20px;
+    }
+    .search-form {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .search-input-wrap {
+        flex: 1;
+        min-width: 220px;
+        position: relative;
+    }
+    .search-icon {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 1rem;
+        pointer-events: none;
+    }
+    .search-input-wrap input {
+        width: 100%;
+        padding: 12px 14px 12px 40px;
+        border: 2px solid var(--border);
+        border-radius: 14px;
+        background: var(--white);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 600;
+        outline: none;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        margin-bottom: 0;
+        box-shadow: 0 1px 4px rgba(30,58,110,0.07);
+    }
+    .search-input-wrap input::placeholder { color: var(--muted); }
+    .search-input-wrap input:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+    #evaluationForm select {
+        padding: 12px 14px;
+        border: 2px solid var(--border);
+        border-radius: 14px;
+        background: var(--white);
+        color: var(--text);
+        font-family: inherit;
+        font-size: 0.95rem;
+        font-weight: 700;
+        cursor: pointer;
+        outline: none;
+        margin-bottom: 0;
+        min-width: 150px;
+        box-shadow: 0 1px 4px rgba(30,58,110,0.07);
+    }
+    #evaluationForm select:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+    }
+    #submitBtn {
+        padding: 12px 28px;
+        font-size: 1rem;
+        border-radius: 14px;
+        flex-shrink: 0;
+    }
 
-            } catch (error) {
-                status.className = "status-message status-error";
-                status.innerText = 'Error submitting decision: ' + error.message;
-                status.style.display = "block";
-            } finally {
-            // Re-enable the button
-            submitBtn.disabled = false;
-            submitBtn.innerText = "Get Recommendation";
-            }
-        }
-        function displayDecision(result) {
-            const resultSection = document.getElementById('decisionResult');
-            const verdictDiv = document.getElementById('verdict');
-            const confidenceDiv = document.getElementById('confidence');
-            const reasoningDiv = document.getElementById('reasoning');
-            const mismatchesDiv = document.getElementById('mismatches');
+    /* ── Results grid ── */
+    .results-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 16px;
+    }
+    .card { position: relative; }
 
-            verdictDiv.innerHTML = `<strong>Verdict:</strong> ${result.verdict}`;
-            confidenceDiv.innerHTML = `<strong>Confidence:</strong> ${(result.confidence * 100).toFixed(1)}%`;
-            reasoningDiv.innerHTML = `<strong>Reasoning:</strong> ${result.reasoning}`;
+    /* ── Verdict card ── */
+    .verdict-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 22px 18px;
+        transition: background 0.3s;
+    }
+    .verdict-card.verdict-yes    { background: #f0fff4; }
+    .verdict-card.verdict-no     { background: #fff5f5; }
+    .verdict-card.verdict-maybe  { background: #fffbeb; }
 
-            let mismatchesHTML = '<strong>Potential Concerns:</strong>';
+    .verdict-emoji { font-size: 3rem; line-height: 1; margin: 6px 0 8px; }
+    .verdict-word  {
+        font-size: 2rem;
+        font-weight: 900;
+        letter-spacing: -0.5px;
+        line-height: 1;
+        margin-bottom: 6px;
+    }
+    .verdict-yes  .verdict-word { color: #38a169; }
+    .verdict-no   .verdict-word { color: #e53e3e; }
+    .verdict-maybe .verdict-word { color: #d69e2e; }
 
-            if (result.potential_mismatches && result.potential_mismatches.length > 0) {
-                mismatchesHTML += '<ul>';
-                result.potential_mismatches.forEach(mismatch => {
-                    mismatchesHTML += `<li>${mismatch}</li>`;
-                });
-                mismatchesHTML += '</ul>';
+    .verdict-conf {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--muted);
+        margin-bottom: 10px;
+    }
+    .conf-bar-wrap {
+        width: 100%;
+        background: #e5e7eb;
+        border-radius: 99px;
+        height: 6px;
+        margin-bottom: 12px;
+        overflow: hidden;
+    }
+    .conf-bar {
+        height: 100%;
+        border-radius: 99px;
+        transition: width 0.5s ease;
+    }
+    .verdict-yes  .conf-bar { background: #38a169; }
+    .verdict-no   .conf-bar { background: #e53e3e; }
+    .verdict-maybe .conf-bar { background: #d69e2e; }
+
+    .verdict-reason {
+        font-size: 0.845rem;
+        color: #374151;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+    .mismatch-list {
+        width: 100%;
+        text-align: left;
+        font-size: 0.78rem;
+        color: #6b7280;
+    }
+    .mismatch-list ul {
+        padding-left: 16px;
+        margin: 4px 0 0;
+        list-style: disc;
+    }
+    .mismatch-list li { margin-bottom: 3px; }
+
+    /* ── Ratings card ── */
+    .ratings-card { padding: 22px 18px; }
+    .rating-big {
+        font-size: 2.4rem;
+        font-weight: 900;
+        color: var(--text);
+        line-height: 1;
+        margin-bottom: 2px;
+    }
+    .rating-max { font-size: 1rem; font-weight: 600; color: var(--muted); }
+    .rating-stars { font-size: 1.3rem; color: #f59e0b; letter-spacing: 2px; margin: 4px 0; }
+    .rating-votes { font-size: 0.78rem; color: var(--muted); margin-bottom: 10px; }
+    .rating-source-link {
+        font-size: 0.78rem;
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 700;
+    }
+    .rating-source-link:hover { text-decoration: underline; }
+    .rating-divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 10px 0;
+    }
+    .review-snippet {
+        font-size: 0.815rem;
+        color: #4b5563;
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        border-left: 3px solid #e5e7eb;
+        padding-left: 10px;
+        margin-bottom: 6px;
+    }
+    .review-snippet-author { font-size: 0.72rem; color: var(--muted); margin: 2px 0 4px 13px; }
+    .review-read-link {
+        font-size: 0.75rem;
+        color: var(--accent);
+        text-decoration: none;
+        margin-left: 13px;
+        font-weight: 700;
+    }
+    .review-read-link:hover { text-decoration: underline; }
+
+    /* ── Where to watch ── */
+    .watch-card { padding: 22px 18px; }
+    .providers-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 4px;
+    }
+    .provider-chip {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        padding: 8px 10px;
+        border: 2px solid var(--border);
+        border-radius: 14px;
+        text-decoration: none;
+        color: var(--text);
+        font-size: 0.7rem;
+        font-weight: 700;
+        background: #f9fafb;
+        transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+        max-width: 80px;
+        text-align: center;
+    }
+    .provider-chip:hover {
+        border-color: var(--accent);
+        box-shadow: 0 2px 8px rgba(28,176,246,0.18);
+        transform: translateY(-2px);
+    }
+    .provider-logo {
+        width: 44px;
+        height: 44px;
+        object-fit: contain;
+        border-radius: 10px;
+    }
+    .provider-kind {
+        font-size: 0.63rem;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .no-providers {
+        font-size: 0.85rem;
+        color: var(--muted);
+        font-style: italic;
+        margin-top: 4px;
+    }
+
+    /* ── Recommendations ── */
+    .recs-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .recs-title {
+        font-size: 0.95rem;
+        font-weight: 900;
+        color: var(--on-bg);
+        letter-spacing: 0.2px;
+    }
+    .recs-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+    }
+    .rec-card {
+        background: var(--white);
+        border: 2px solid var(--border);
+        border-radius: 16px;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        box-shadow: 0 2px 8px var(--shadow);
+        transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+        cursor: default;
+    }
+    .rec-card:hover {
+        border-color: var(--accent);
+        box-shadow: 0 4px 14px rgba(59,130,246,0.15);
+        transform: translateY(-2px);
+    }
+    .rec-icon  { font-size: 1.4rem; }
+    .rec-title {
+        font-size: 0.925rem;
+        font-weight: 800;
+        color: var(--text);
+        line-height: 1.25;
+    }
+    .rec-reason {
+        font-size: 0.775rem;
+        color: var(--muted);
+        line-height: 1.45;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    /* ── Shared ── */
+    .loading-text {
+        font-size: 0.85rem;
+        color: var(--muted);
+        font-style: italic;
+        margin-top: 4px;
+    }
+    .not-found-text {
+        font-size: 0.85rem;
+        color: var(--muted);
+        font-style: italic;
+    }
+</style>
+
+
+<!-- ═══════════════════ SCRIPT ═══════════════════ -->
+<script>
+const STORAGE_KEY = 'pop_last_result_v2';
+
+// ── Persistence ─────────────────────────────────
+function saveSession(payload) {
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch(_) {}
+}
+function loadSession() {
+    try { const r = sessionStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; }
+    catch(_) { return null; }
+}
+
+// ── Helpers ──────────────────────────────────────
+function renderStars(rating, max) {
+    const n = max === 10 ? rating / 2 : rating;
+    const f = Math.round(n);
+    return '★'.repeat(Math.min(f, 5)) + '☆'.repeat(Math.max(5 - f, 0));
+}
+
+function verdictMeta(v) {
+    if (v === 'Yes')   return { cls: 'verdict-yes',   emoji: '✅', word: 'PICK IT' };
+    if (v === 'No')    return { cls: 'verdict-no',    emoji: '❌', word: 'PASS' };
+    return                    { cls: 'verdict-maybe', emoji: '🤔', word: 'MAYBE' };
+}
+
+// ── Render decision ──────────────────────────────
+function displayDecision(result) {
+    const grid = document.getElementById('resultsGrid');
+    const card = document.getElementById('verdictCard');
+    const meta = verdictMeta(result.verdict);
+
+    card.className = 'card verdict-card pop-in ' + meta.cls;
+    document.getElementById('verdictEmoji').textContent  = meta.emoji;
+    document.getElementById('verdictWord').textContent   = meta.word;
+    document.getElementById('verdictConf').textContent   =
+        `Confidence: ${(result.confidence * 100).toFixed(0)}%`;
+
+    const confPct = (result.confidence * 100).toFixed(0);
+    card.querySelector('#verdictConf').insertAdjacentHTML('afterend',
+        `<div class="conf-bar-wrap"><div class="conf-bar" style="width:${confPct}%"></div></div>`
+    );
+
+    document.getElementById('verdictReason').textContent = result.reasoning;
+
+    const mm = result.potential_mismatches || [];
+    const mmEl = document.getElementById('verdictMismatches');
+    if (mm.length) {
+        mmEl.innerHTML = '<strong style="font-size:0.72rem;color:#9ca3af;">Concerns</strong>'
+            + '<ul>' + mm.slice(0,3).map(m => `<li>${m}</li>`).join('') + '</ul>';
+    }
+    grid.style.display = 'grid';
+}
+
+// ── Render ratings ───────────────────────────────
+function displayRatings(r) {
+    const el = document.getElementById('ratingsContent');
+    if (!r) { el.innerHTML = '<p class="not-found-text">No rating data found.</p>'; return; }
+
+    const ratingHTML = r.rating != null
+        ? `<div class="rating-big">${r.rating}<span class="rating-max">/${r.rating_max}</span></div>
+           <div class="rating-stars">${renderStars(r.rating, r.rating_max)}</div>`
+        : `<div class="rating-big" style="color:var(--muted)">N/A</div>`;
+
+    const votesHTML = r.vote_count
+        ? `<div class="rating-votes">${Number(r.vote_count).toLocaleString()} ratings</div>`
+        : '';
+
+    const sourceHTML = r.item_url
+        ? `<a class="rating-source-link" href="${r.item_url}" target="_blank" rel="noopener">
+               View on ${r.source} ↗
+           </a>`
+        : `<span style="font-size:0.78rem;color:var(--muted)">Source: ${r.source}</span>`;
+
+    let snippetHTML = '';
+    const snip = (r.snippets || [])[0];
+    if (snip) {
+        const text   = typeof snip === 'string' ? snip : snip.text;
+        const url    = typeof snip === 'object' ? snip.url : null;
+        const author = typeof snip === 'object' ? snip.author : null;
+        snippetHTML = `<hr class="rating-divider">
+            <div class="review-snippet">${text}</div>
+            ${author ? `<div class="review-snippet-author">— ${author}</div>` : ''}
+            ${url ? `<a class="review-read-link" href="${url}" target="_blank" rel="noopener">Read full review →</a>` : ''}`;
+    }
+
+    const matchHTML = r.matched_title
+        ? `<div style="font-size:0.72rem;color:var(--muted);margin-bottom:6px;">
+               Matched: <em>"${r.matched_title}"</em>
+           </div>`
+        : '';
+
+    el.innerHTML = matchHTML + ratingHTML + votesHTML + sourceHTML + snippetHTML;
+}
+
+// ── Render where to get ──────────────────────────
+function displayWatch(r, itemType) {
+    document.getElementById('watchHeading').textContent =
+        itemType === 'book' ? 'Where to Get' : 'Where to Watch';
+
+    const el = document.getElementById('watchContent');
+    if (!r || !r.where_to_get || !r.where_to_get.length) {
+        el.innerHTML = '<p class="no-providers">No availability data for your region.</p>';
+        return;
+    }
+    const chips = r.where_to_get.map(p => {
+        const badge = p.kind === 'stream' ? 'Stream' : (p.kind === 'buy/rent' ? 'Buy/Rent' : 'Buy');
+        return `<a class="provider-chip" href="${p.link}" target="_blank" rel="noopener" title="${p.name}">
+                    <img class="provider-logo" src="${p.logo_url}" alt="${p.name}"
+                         onerror="this.style.display='none'">
+                    <span>${p.name}</span>
+                    <span class="provider-kind">${badge}</span>
+                </a>`;
+    }).join('');
+    el.innerHTML = `<div class="providers-grid">${chips}</div>`;
+}
+
+// ── Render recommendations ───────────────────────
+function displayRecs(recs, itemType) {
+    const section = document.getElementById('recsSection');
+    const grid    = document.getElementById('recsGrid');
+    if (!recs || !recs.length) { section.style.display = 'none'; return; }
+
+    const icon = itemType === 'book' ? '📚' : '🎬';
+    grid.innerHTML = recs.map((r, i) =>
+        `<div class="rec-card slide-up" style="animation-delay:${i * 0.08}s">
+            <div class="rec-icon">${icon}</div>
+            <div class="rec-title">${r.title}</div>
+            <div class="rec-reason">${r.reason}</div>
+        </div>`
+    ).join('');
+    section.style.display = 'block';
+}
+
+// ── Fetch reviews ────────────────────────────────
+async function fetchReviews(title, itemType) {
+    try {
+        const resp = await fetch(`/reviews?${new URLSearchParams({title, type: itemType})}`);
+        const json = await resp.json();
+        return resp.ok ? json.data : null;
+    } catch(_) { return null; }
+}
+
+// ── Fetch recommendations ────────────────────────
+async function fetchRecs(title, itemType) {
+    try {
+        const resp = await fetch(`/recommendations?${new URLSearchParams({title, type: itemType})}`);
+        const json = await resp.json();
+        return resp.ok ? json.data : [];
+    } catch(_) { return []; }
+}
+
+// ── After decision: load reviews + recs in parallel ──
+async function loadReviewsAndRecs(title, itemType, decisionData) {
+    // Show loading placeholders immediately
+    document.getElementById('ratingsContent').innerHTML = '<p class="loading-text">⏳ Loading ratings…</p>';
+    document.getElementById('watchContent').innerHTML   = '<p class="loading-text">⏳ Loading…</p>';
+
+    const [reviewsData, recsData] = await Promise.all([
+        fetchReviews(title, itemType),
+        fetchRecs(title, itemType),
+    ]);
+
+    displayRatings(reviewsData);
+    displayWatch(reviewsData, itemType);
+    displayRecs(recsData, itemType);
+
+    // Persist everything
+    saveSession({ decisionData, reviewsData, recsData, itemName: title, itemType });
+}
+
+// ── Job polling ──────────────────────────────────
+async function pollJob(jobId, itemName, itemType, attempts = 0) {
+    const statusEl = document.getElementById('statusMessage');
+    if (attempts > 30) {
+        showStatus('error', 'Request timed out. Please try again.');
+        return;
+    }
+    try {
+        const resp = await fetch(`/jobs/${jobId}`);
+        const json = await resp.json();
+        if (!resp.ok) { showStatus('error', (json.error && json.error.message) || 'Job error'); return; }
+
+        const state  = json.data && json.data.status;
+        const result = json.data && json.data.result;
+
+        if (state === 'finished') {
+            if (result && result.status === 'completed') {
+                statusEl.style.display = 'none';
+                displayDecision(result.data);
+                await loadReviewsAndRecs(itemName, itemType, result.data);
+            } else if (result && result.status === 'suggestions') {
+                showStatus('error', 'Ambiguous title — please be more specific.');
             } else {
-                mismatchesHTML += '<p>None</p>';
+                showStatus('error', 'Evaluation failed.');
             }
-
-            mismatchesDiv.innerHTML = mismatchesHTML;
-            resultSection.style.display = 'block';
+            return;
         }
-        // This tells the browser: "When the evaluationForm is submitted, run handleEvaluation"
-        document.getElementById('evaluationForm').addEventListener('submit', handleEvaluation);
-    </script>
+        if (state === 'failed') { showStatus('error', 'Evaluation failed.'); return; }
+        setTimeout(() => pollJob(jobId, itemName, itemType, attempts + 1), 1000);
+    } catch(err) { showStatus('error', 'Connection error: ' + err.message); }
+}
+
+// ── Form submit ──────────────────────────────────
+async function handleEvaluation(event) {
+    event.preventDefault();
+
+    const itemName  = document.getElementById('itemName').value.trim();
+    const itemType  = document.getElementById('itemType').value;
+    const btn       = document.getElementById('submitBtn');
+
+    // Reset UI
+    document.getElementById('resultsGrid').style.display   = 'none';
+    document.getElementById('recsSection').style.display   = 'none';
+    document.getElementById('verdictCard').className       = 'card verdict-card';
+    document.getElementById('verdictCard').querySelectorAll('.conf-bar-wrap').forEach(e => e.remove());
+    document.getElementById('verdictEmoji').textContent    = '';
+    document.getElementById('verdictWord').textContent     = '';
+    document.getElementById('verdictConf').textContent     = '';
+    document.getElementById('verdictReason').textContent   = '';
+    document.getElementById('verdictMismatches').innerHTML = '';
+    document.getElementById('recsGrid').innerHTML          = '';
+    document.getElementById('statusMessage').style.display = 'none';
+    sessionStorage.removeItem(STORAGE_KEY);
+
+    btn.disabled  = true;
+    btn.textContent = '⏳ Analyzing…';
+
+    try {
+        const resp = await fetch('/decide', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_name: itemName, item_type: itemType }),
+        });
+        const json = await resp.json();
+
+        if (resp.status === 202 && json.data && json.data.job_id) {
+            showStatus('success', 'In queue — evaluating…');
+            await pollJob(json.data.job_id, itemName, itemType);
+        } else if (resp.ok && json.data) {
+            displayDecision(json.data);
+            await loadReviewsAndRecs(itemName, itemType, json.data);
+        } else {
+            const msg = json.error && json.error.type === 'missing_preferences'
+                ? 'Please <a href="/settings">set your preferences</a> first.'
+                : ((json.error && json.error.message) || 'Something went wrong.');
+            showStatus('error', msg, true);
+        }
+    } catch(err) {
+        showStatus('error', 'Network error: ' + err.message);
+    } finally {
+        btn.disabled    = false;
+        btn.textContent = 'Evaluate';
+    }
+}
+
+function showStatus(type, msg, isHTML = false) {
+    const el = document.getElementById('statusMessage');
+    el.className = 'status-message ' + (type === 'error' ? 'status-error' : 'status-success');
+    if (isHTML) el.innerHTML = msg; else el.textContent = msg;
+    el.style.display = 'block';
+}
+
+// ── Restore session on page load ─────────────────
+(function restore() {
+    const saved = loadSession();
+    if (!saved || !saved.decisionData) return;
+
+    const nameEl = document.getElementById('itemName');
+    const typeEl = document.getElementById('itemType');
+    if (nameEl && saved.itemName) nameEl.value = saved.itemName;
+    if (typeEl && saved.itemType) {
+        Array.from(typeEl.options).forEach(o => { o.selected = o.value === saved.itemType; });
+    }
+
+    displayDecision(saved.decisionData);
+    displayRatings(saved.reviewsData);
+    displayWatch(saved.reviewsData, saved.itemType);
+    displayRecs(saved.recsData, saved.itemType);
+})();
+
+document.getElementById('evaluationForm').addEventListener('submit', handleEvaluation);
+</script>
 {% endblock %}
