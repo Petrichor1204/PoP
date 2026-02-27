@@ -11,6 +11,7 @@ services:
     name: pop-redis
     plan: free
     maxmemoryPolicy: noeviction
+    ipAllowList: []   # empty = only allow connections from Render services internally
 
   # ── Web (Flask) ──────────────────────────────────────────
   - type: web
