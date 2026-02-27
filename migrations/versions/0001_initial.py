@@ -34,7 +34,7 @@ def upgrade():
         sa.Column("emotional_tolerance", sa.String(length=50), nullable=False),
         sa.Column("goal", sa.String(length=100), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("false")),
     )
     op.create_table(
         "decisions",
