@@ -9,6 +9,7 @@ services:
   # ── Web (Flask) ──────────────────────────────────────────
   - type: web
     name: pop-web
+    plan: free
     runtime: docker
     dockerfilePath: ./Dockerfile
     envVars:
