@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import (
     create_engine,
@@ -16,9 +17,16 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from werkzeug.security import generate_password_hash, check_password_hash
 from utils import validate_preferences, validate_decision
 
-DB_NAME = "my_database.db"
+DB_NAME = "my_database.db"  # used as SQLite fallback in dev/tests
+
 
 def get_database_url():
+    url = os.getenv("DATABASE_URL")
+    if url:
+        # Render (and older Heroku) give postgres:// — SQLAlchemy needs postgresql://
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+        return url
     return f"sqlite:///{DB_NAME}"
 
 Base = declarative_base()
@@ -81,7 +89,10 @@ class AiCache(Base):
 
 
 def get_engine():
-    return create_engine(get_database_url(), connect_args={"check_same_thread": False})
+    url = get_database_url()
+    # connect_args is SQLite-only; Postgres doesn't accept it
+    kwargs = {"connect_args": {"check_same_thread": False}} if url.startswith("sqlite") else {}
+    return create_engine(url, **kwargs)
 
 
 def get_session():

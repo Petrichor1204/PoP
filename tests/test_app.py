@@ -14,7 +14,7 @@ import database as db
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     test_db = tmp_path / "test.db"
-    monkeypatch.setattr(db, "DB_NAME", str(test_db))
+    monkeypatch.setattr(db, "get_database_url", lambda: f"sqlite:///{test_db}")
     db.init_db()
 
     app = app_module.app

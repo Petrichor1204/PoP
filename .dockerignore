@@ -1,0 +1,12 @@
+.env
+*.db
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.github/
+tests/
+*.md
+.flake8
+dump.rdb
