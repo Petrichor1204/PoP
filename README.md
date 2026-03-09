@@ -180,6 +180,14 @@ Per-user rolling window: 60 requests per minute by default. Configurable via `RA
 
 Review data (ratings, snippets, watch providers) and AI responses are cached in the `ai_cache` table for 24 hours to avoid redundant API calls and stay within free-tier rate limits.
 
-## License
+## Pages
+<img width="1470" height="956" alt="login" src="https://github.com/user-attachments/assets/6bba6976-fdf1-4903-9451-1e5c4d398c30" />
 
-Specify your license here (e.g., MIT).
+<img width="1470" height="956" alt="preferences" src="https://github.com/user-attachments/assets/001ce2e2-c24c-42e7-9c75-aaa9e1978f3d" />
+
+<img width="1470" height="956" alt="evaluate" src="https://github.com/user-attachments/assets/c4260ef0-c10b-4b0b-b354-41bd09cce22d" />
+
+<img width="1470" height="956" alt="verdict" src="https://github.com/user-attachments/assets/a3b1d6c8-91f0-420d-9f61-25db19c7b4d6" />
+
+<img width="1470" height="956" alt="history" src="https://github.com/user-attachments/assets/e5560708-4a7f-40dd-bbba-91bdec89338a" />
+
